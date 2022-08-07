@@ -1,0 +1,59 @@
+.org 0x7dd0
+
+# 1) save all the registers to restore them
+# NOTICE: assume no one else uses [0xba00, 0xbb00] in the staging buffer
+
+STADSTGBUF_DSZ64_ASZ16_SC1(0xba40, , r10) !m2
+STADSTGBUF_DSZ64_ASZ16_SC1(0xba80, , r11) !m2
+STADSTGBUF_DSZ64_ASZ16_SC1(0xbac0, , r12) !m2
+STADSTGBUF_DSZ64_ASZ16_SC1(0xbb00, , r13) !m2
+
+# 2) remove the hook in the match&patch assuming it is at 0
+
+r10:= ZEROEXT_DSZ32(0x00000000)
+
+# pause frontend
+r12:= MOVEFROMCREG_DSZ64( , 0x38c)
+MOVETOCREG_DSZ64(r10, 0x38c) !m2
+
+# write match&patch at location 0 with the value of 0
+
+r13:= ZEROEXT_DSZ32(0x00000303)
+r13:= SHL_DSZ32(r13, 0x00000008)
+
+MOVETOCREG_DSZ64(r13, 0x6a1) !m2
+MOVETOCREG_DSZ64(r10, 0x6a0) !m2
+
+MOVETOCREG_DSZ64(r10, 0x6a4) !m2
+MOVETOCREG_DSZ64(r10, 0x6a4) !m2
+
+MOVETOCREG_DSZ64(r10, 0x6a1) !m2
+
+# restore frontend
+MOVETOCREG_DSZ64(r12, 0x38c) !m2
+
+#### INSERT HERE THE DUMPING LOGIC TO 0xba00, 0xbb40, 0xbb80, 0xbbc0 #######
+
+r10:= MOVE_DSZ64(tmp0)
+# # r10:= LDPPHYSTICKLE_DSZ64_ASZ64_SC1(r10)
+STADSTGBUF_DSZ64_ASZ16_SC1(0xba00, , r10) !m2
+
+r10:= MOVE_DSZ64(tmp1)
+STADSTGBUF_DSZ64_ASZ16_SC1(0xbb40, , r10) !m2
+
+r10:= MOVE_DSZ64(tmp2)
+STADSTGBUF_DSZ64_ASZ16_SC1(0xbb80, , r10) !m2
+
+r10:= MOVE_DSZ64(tmp3)
+STADSTGBUF_DSZ64_ASZ16_SC1(0xbbc0, , r10) !m2
+
+############################################################################
+
+
+# 3) restore r1 regs
+r10 := LDSTGBUF_DSZ64_ASZ16_SC1(0xba40) !m2
+r11 := LDSTGBUF_DSZ64_ASZ16_SC1(0xba80) !m2
+r12 := LDSTGBUF_DSZ64_ASZ16_SC1(0xbac0) !m2
+r13 := LDSTGBUF_DSZ64_ASZ16_SC1(0xbb00) !m2
+# 4) finally continue execution, this will have the GOTO addr injected from the C code
+NOP

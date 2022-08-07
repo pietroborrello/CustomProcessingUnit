@@ -1,0 +1,14 @@
+.org 0x7da0
+# def time_access(tmp0: addr)
+
+tmp2:= ZEROEXT_DSZ64(0x40)
+LBSYNC(0x0)
+rax:= MOVEFROMCREG_DSZ64( , 0x2d7) !m1,m2
+
+<loop>
+tmp1:= LDPPHYSTICKLE_DSZ64_ASZ64_SC1(tmp0)
+tmp0:= ADD_DSZ64(tmp0, 0x40)
+tmp2:= SUB_DSZ64(0x1, tmp2)
+UJMPCC_DIRECT_NOTTAKEN_CONDNZ(tmp2, <loop>)
+
+rbx:= MOVEFROMCREG_DSZ64( , 0x2d7) !m1,m2

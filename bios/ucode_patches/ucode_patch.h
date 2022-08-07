@@ -1,0 +1,7 @@
+unsigned long addr = 0x7c00;
+unsigned long ucode_patch[][4] = {
+    // U7c00: rax:= ZEROEXT_DSZ32(0x00001337), rbx:= ZEROEXT_DSZ32(0x00001337), rcx:= ZEROEXT_DSZ32(0x00001337), SEQ_NOP
+    {0x4008374e0008, 0x8008374e3008, 0x8374e1008, 0x300000c0},
+    // U7c04: rdx:= ZEROEXT_DSZ32(0x00001337), unk_256() !m1, NOP, SEQ_END
+    {0xc008374e2008, 0x125600000000, 0x0, 0x130000f2},
+};

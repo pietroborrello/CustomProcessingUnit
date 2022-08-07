@@ -1,0 +1,25 @@
+.org 0x7da0
+# def hook(tmp0: value, tmp1: addr)
+tmp10:= ZEROEXT_DSZ32(0x00000000)
+# pause frontend
+tmp12:= MOVEFROMCREG_DSZ64( , 0x38c)
+MOVETOCREG_DSZ64(tmp10, 0x38c) !m2
+
+# write match&patch at location tmp1 with the value of tmp0
+
+tmp9:= ZEROEXT_DSZ32(0x00000303)
+tmp9:= SHL_DSZ32(tmp9, 0x00000008)
+
+MOVETOCREG_DSZ64(tmp9, 0x6a1) !m2
+MOVETOCREG_DSZ64(tmp1, 0x6a0) !m2
+
+MOVETOCREG_DSZ64(tmp0, 0x6a4) !m2
+MOVETOCREG_DSZ64(tmp10, 0x6a4) !m2
+
+MOVETOCREG_DSZ64(tmp10, 0x6a1) !m2
+
+# restore frontend
+MOVETOCREG_DSZ64(tmp12, 0x38c) !m2
+
+rax:= ZEROEXT_DSZ32(0x00001337)
+rax:= CONCAT_DSZ32(rax, 0x00001337)

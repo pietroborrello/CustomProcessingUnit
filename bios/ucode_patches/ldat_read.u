@@ -1,0 +1,25 @@
+.org 0x7da0
+# def ldat_read(tmp0: pdat_reg, tmp1: array_bank_sel, tmp2: addr)
+tmp10:= ZEROEXT_DSZ32(0x00000000)
+
+tmp11:= ADD_DSZ32(tmp0, 0x00000001)
+tmp12:= ADD_DSZ32(tmp0, 0x00000002)
+
+# pause frontend
+tmp9:= MOVEFROMCREG_DSZ64( , 0x38c)
+MOVETOCREG_DSZ64(tmp10, 0x38c) !m2
+
+# program the LDAT to read from memory
+
+# it sometimes hangs, if not reading from PDAT before writing to it
+tmp13:= MOVEFROMCREG_DSZ64( , tmp11) !m2
+
+MOVETOCREG_DSZ64(tmp1, tmp11) !m2
+MOVETOCREG_DSZ64(tmp2, tmp0) !m2
+
+rax:= MOVEFROMCREG_DSZ64( , tmp12) !m2
+
+MOVETOCREG_DSZ64(tmp10, tmp11) !m2
+
+# restore frontend
+MOVETOCREG_DSZ64(tmp9, 0x38c) !m2

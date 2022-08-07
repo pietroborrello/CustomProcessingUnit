@@ -1,0 +1,45 @@
+.org 0x7da0
+tmp0:= ZEROEXT_DSZ32(0x00000000)
+# pause frontend
+tmp2:= MOVEFROMCREG_DSZ64( , 0x38c)
+MOVETOCREG_DSZ64(tmp0, 0x38c) !m2
+
+# write match&patch 0x1f, but rewire it to jump to 0x7dfc (0xfe target)
+tmp3:= ZEROEXT_DSZ32(0x0000003e) # 0x1f*2
+tmp4:= ZEROEXT_DSZ32(0x00004589)
+tmp4:= CONCAT_DSZ16(0x00003efe, tmp4) # 0x3efe4589
+
+tmp9:= ZEROEXT_DSZ32(0x00000303)
+tmp9:= SHL_DSZ32(tmp9, 0x00000008)
+
+MOVETOCREG_DSZ64(tmp9, 0x6a1) !m2
+MOVETOCREG_DSZ64(tmp3, 0x6a0) !m2
+
+MOVETOCREG_DSZ64(tmp4, 0x6a4) !m2
+MOVETOCREG_DSZ64(tmp0, 0x6a4) !m2
+
+MOVETOCREG_DSZ64(tmp0, 0x6a1) !m2
+
+# write match&patch [0, 0x1f]
+tmp1:= ZEROEXT_DSZ32(0x0000001f)
+
+tmp9:= ZEROEXT_DSZ32(0x00000303)
+tmp9:= SHL_DSZ32(tmp9, 0x00000008)
+
+
+MOVETOCREG_DSZ64(tmp9, 0x6a1) !m2
+MOVETOCREG_DSZ64(tmp0, 0x6a0) !m2
+
+<loop>
+MOVETOCREG_DSZ64(tmp0, 0x6a4) !m2
+MOVETOCREG_DSZ64(tmp0, 0x6a4) !m2
+tmp1:= SUB_DSZ32(0x00000001, tmp1)
+UJMPCC_DIRECT_NOTTAKEN_CONDNZ(tmp1, <loop>)
+
+MOVETOCREG_DSZ64(tmp0, 0x6a1) !m2
+
+# restore frontend
+MOVETOCREG_DSZ64(tmp2, 0x38c) !m2
+
+rax:= ZEROEXT_DSZ32(0x00001337)
+rax:= CONCAT_DSZ32(rax, 0x00001337)

@@ -1,0 +1,30 @@
+.org 0x7da0
+
+# def dump(tmp0: msr)
+
+# get the WR descriptor
+tmp1:= ZEROEXT_DSZ64(tmp0)
+tmp1:= OR_DSZ32(0x00004000, tmp1)
+tmp2:= ZEROEXT_DSZ64(0x8000)
+tmp2:= CONCAT_DSZ16(0x0001, tmp2)
+tmp1:= NOTAND_DSZ32(tmp2, tmp1)
+rax:= MSR2CR( , tmp1)
+
+# get the RD descriptor
+tmp1:= ZEROEXT_DSZ64(tmp0)
+tmp2:= ZEROEXT_DSZ64(0xc000)
+tmp2:= CONCAT_DSZ16(0x0001, tmp2)
+tmp1:= NOTAND_DSZ32(tmp2, tmp1)
+rbx:= MSR2CR( , tmp1)
+
+# get the first param
+tmp1:= ZEROEXT_DSZ64(tmp0)
+tmp1:= OR_DSZ32(0x0000c000, tmp1)
+rcx:= MSR2CR( , tmp1)
+
+# get the second param
+tmp1:= ZEROEXT_DSZ64(tmp0)
+tmp2:= ZEROEXT_DSZ64(0x4000)
+tmp2:= CONCAT_DSZ16(0x0001, tmp2)
+tmp1:= OR_DSZ32(tmp2, tmp1)
+rdx:= MSR2CR( , tmp1)

@@ -1,0 +1,9 @@
+unsigned long addr = 0x7da0;
+unsigned long ucode_patch[][4] = {
+    // U7da0: tmp2:= ZEROEXT_DSZ64(0x40), LBSYNC(0x0), rax:= MOVEFROMCREG_DSZ64( , 0x2d7) !m1,m2, SEQ_NOP
+    {0x404840032008, 0xcfef00000008, 0x3062d70a0200, 0x300000c0},
+    // U7da4: tmp1:= LDPPHYSTICKLE_DSZ64_ASZ64_SC1(tmp0), tmp0:= ADD_DSZ64(tmp0, 0x40), tmp2:= SUB_DSZ64(0x1, tmp2), SEQ_NOP
+    {0xce6500031030, 0x804040030230, 0x804501032c88, 0x300000c0},
+    // U7da8: UJMPCC_DIRECT_NOTTAKEN_CONDNZ(tmp2, U7da4), rbx:= MOVEFROMCREG_DSZ64( , 0x2d7) !m1,m2, unk_256() !m1, SEQ_END
+    {0x8151a47402f2, 0xf062d70a3200, 0x125600000000, 0x130000f2},
+};
