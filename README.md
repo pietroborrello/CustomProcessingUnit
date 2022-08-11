@@ -9,6 +9,8 @@ Using our [microcode decompiler](https://github.com/pietroborrello/ghidra-atom-m
 
 Find the static analysis framework at https://github.com/pietroborrello/ghidra-atom-microcode.
 
+Check out our slides describing this work [here](./slides.pdf).
+
 **Note**: Custom Processing Unit requires a Red-Unlocked CPU: currently, only [Goldmont CPUs](https://en.wikipedia.org/wiki/Goldmont) (GLM) have a [public Red Unlock](https://github.com/ptresearch/IntelTXE-PoC). We tested Gigabyte GB-BPCE-3350C with CPU stepping 0x9 and 0xa (cpuid 0x000506C9 and 0x000506CA).
 
 Custom Processing Unit is made up of a UEFI application and a few libraries. The UEFI application interacts with the GLM CPU, while the libraries provide different helpers to compile microcode into the UEFI application and analyze its output.
