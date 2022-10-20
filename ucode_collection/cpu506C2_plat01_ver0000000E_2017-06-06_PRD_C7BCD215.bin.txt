@@ -1,5 +1,5 @@
 
-[../../libraries/ucode_collection/cpu506C2_plat01_ver0000000E_2017-06-06_PRD_C7BCD215.bin]
+[ucode_collection/cpu506C2_plat01_ver0000000E_2017-06-06_PRD_C7BCD215.bin]
     CPU: 0x506c2
     size: 0x3580
     rev: 0xe
@@ -98,29 +98,30 @@ UCODE:
 [01da] initialize arrays
 [01db] write match & patch - size: 0x0012
     [0000000000000000]
-    [1f04a602be5a3a3b] 0x3a3a -> 0x7cb4
-    [1f1fb0f3be796ef7] 0x6ef6 -> 0x7cf2
-    [1f29babdbe966217] 0x6216 -> 0x7d2c
-    [1f3c1225be9a29a3] 0x29a2 -> 0x7d34
-    [1f11032ebe3769ef] 0x69ee -> 0x7c6e
-    [1f1394e5be1b18b3] 0x18b2 -> 0x7c36
-    [1f18903cbe2f2833] 0x2832 -> 0x7c5e
-    [1f07131dbe25549b] 0x549a -> 0x7c4a
-    [1f198c62be946707] 0x6706 -> 0x7d28
-    [1f1abc6bbe2923ab] 0x23aa -> 0x7c52
-    [1f000c6ebe444869] 0x4868 -> 0x7c88
-    [1f0122c4be545ce3] 0x5ce2 -> 0x7ca8
-    [1f06298dbe406909] 0x6908 -> 0x7c80
-    [1f38a619be6b0e67] 0x0e66 -> 0x7cd6
-    [1f159d01be854c5b] 0x4c5a -> 0x7d0a
-    [1f169b01be3b1437] 0x1436 -> 0x7c76
-    [1f2498d2be6533a9] 0x33a8 -> 0x7cca
+    [1f04a602be5a3a3b] 0x3e: 0x3a3a -> 0x7cb4, 0x3e: 0x4c04 -> 0x7c12
+    [1f1fb0f3be796ef7] 0x3e: 0x6ef6 -> 0x7cf2, 0x3e: 0x61e6 -> 0x7c7e
+    [1f29babdbe966217] 0x3e: 0x6216 -> 0x7d2c, 0x3e: 0x757a -> 0x7ca6
+    [1f3c1225be9a29a3] 0x3e: 0x29a2 -> 0x7d34, 0x3e: 0x244a -> 0x7cf0
+    [1f11032ebe3769ef] 0x3e: 0x69ee -> 0x7c6e, 0x3e: 0x065c -> 0x7c44
+    [1f1394e5be1b18b3] 0x3e: 0x18b2 -> 0x7c36, 0x3e: 0x29ca -> 0x7c4e
+    [1f18903cbe2f2833] 0x3e: 0x2832 -> 0x7c5e, 0x3e: 0x2078 -> 0x7c62
+    [1f07131dbe25549b] 0x3e: 0x549a -> 0x7c4a, 0x3e: 0x263a -> 0x7c1c
+    [1f198c62be946707] 0x3e: 0x6706 -> 0x7d28, 0x3e: 0x18c4 -> 0x7c66
+    [1f1abc6bbe2923ab] 0x3e: 0x23aa -> 0x7c52, 0x3e: 0x78d6 -> 0x7c6a
+    [1f000c6ebe444869] 0x3e: 0x4868 -> 0x7c88, 0x3e: 0x18dc -> 0x7c00
+    [1f0122c4be545ce3] 0x3e: 0x5ce2 -> 0x7ca8, 0x3e: 0x4588 -> 0x7c04
+    [1f06298dbe406909] 0x3e: 0x6908 -> 0x7c80, 0x3e: 0x531a -> 0x7c18
+    [1f38a619be6b0e67] 0x3e: 0x0e66 -> 0x7cd6, 0x3e: 0x4c32 -> 0x7ce2
+    [1f159d01be854c5b] 0x3e: 0x4c5a -> 0x7d0a, 0x3e: 0x3a02 -> 0x7c56
+    [1f169b01be3b1437] 0x3e: 0x1436 -> 0x7c76, 0x3e: 0x3602 -> 0x7c5a
+    [1f2498d2be6533a9] 0x3e: 0x33a8 -> 0x7cca, 0x3e: 0x31a4 -> 0x7c92
 [026e] install addr: 0x7c00 - size 0x00ed
-  <match & patch: 0x0000 -> 0x7c00>
+  <match & patch: 0x18dc -> 0x7c00>
     [c0053d03ffc8] U7c00:  tmp15:= SUB_DSZ32(0x0000003d, tmp15) 
     [4152f45c027f] U7c01:  UJMPCC_DIRECT_NOTTAKEN_CONDBE(tmp15, U37f4) 
     [c21e0303d23d] U7c02: LFNCEWTMRK-> tmp13:= SIGEVENT(tmp13, 0x00000003) SEQW URET1
       [070000ce]
+  <match & patch: 0x4588 -> 0x7c04>
     [c00524071e08] U7c04:  tmp1:= SUB_DSZ32(0x00000124, tmp8) 
     [4150297002f1] U7c05:  UJMPCC_DIRECT_NOTTAKEN_CONDZ(tmp1, U7c29) SEQW GOTO U2711
     [c042bb1c0200] U7c06: LFNCEMARK-> MOVETOCREG_DSZ64( , 0x00000000, 0x7bb) 
@@ -135,16 +136,19 @@ UCODE:
       [21a03110]
     [804800035d72] U7c10:  tmp5:= ZEROEXT_DSZ64(tmp2, tmp5) 
     [c042bb1f5235] U7c11:  tmp5:= MOVETOCREG_DSZ64(tmp5, 0x7bb) SEQW GOTO U29ad
+  <match & patch: 0x4c04 -> 0x7c12>
     [400100030030] U7c12:  tmp0:= OR_DSZ32(tmp0) 
       [11a9ad40]
     [415100000fb0] U7c14: SYNCFULL-> UJMPCC_DIRECT_NOTTAKEN_CONDNZ(tmp0, tmp14) SEQW GOTO U4c06
     [004307080200] U7c15:  WRITEURAM( , 0x00000000, 0x0007, 32) 
     [815dd46002c0] U7c16:  UJMP( , U78d4) 
       [384c0600]
+  <match & patch: 0x531a -> 0x7c18>
     [c1300803a231] U7c18:  tmp10:= SELECTCC_DSZ32_CONDZ(tmp1, 0x00000008) 
     [800100032cba] U7c19:  tmp2:= OR_DSZ32(tmp10, tmp2) 
     [41312003a238] U7c1a:  tmp10:= SELECTCC_DSZ32_CONDNZ(tmp8, 0x00000020) SEQW GOTO U531c
       [01d31c80]
+  <match & patch: 0x263a -> 0x7c1c>
     [c06213174200] U7c1c:  tmp4:= MOVEFROMCREG_DSZ64( , 0x513) 
     [2a6213540734] U7c1d: LFNCEMARK-> MOVETOCREG_BTR_DSZ64(tmp4, 0x00000031, 0x513) !m2 
     [800800000000] U7c1e:  NOP 
@@ -186,6 +190,7 @@ UCODE:
     [400e02000200] U7c41:  WRMSLOOPCTRFBR( , 0x00000002) 
     [800c1c300280] U7c42:  SAVEUIP( , 0x00, U4c1c) SEQW GOTO U0051
       [01805180]
+  <match & patch: 0x065c -> 0x7c44>
     [0fff00000000] U7c44: SYNCFULL-> SFENCE() 
     [29628903f200] U7c45:  tmp15:= MOVETOCREG_BTS_DSZ64( , 0x089) !m2 
     [800800000000] U7c46:  NOP 
@@ -197,6 +202,7 @@ UCODE:
       [187c4840]
     [c0563103f23f] U7c4c:  tmp15:= BTR_DSZ64(tmp15, 0x00000031) SEQW GOTO U549c
     [000000000000] U7c4d:  NOP 
+  <match & patch: 0x29ca -> 0x7c4e>
     [0e750003003c] U7c4e: LFNCEMARK-> tmp0:= LDSTGBUF_DSZ64_ASZ16_SC1(tmp12) 
       [15549c00]
     [3042f1080240] U7c50:  MOVETOCREG_DSZ64( , 0x00000000, 0x2f1, 32) !m1,m2 SEQW GOTO U29cc
@@ -206,10 +212,12 @@ UCODE:
       [21a9cc00]
     [286a8429027e] U7c54:  BTUJB_DIRECT_NOTTAKEN(tmp14, 0x00000004, U5a84) !m2 SEQW GOTO U23ac
     [000000000000] U7c55:  NOP 
+  <match & patch: 0x3a02 -> 0x7c56>
     [c0520568027a] U7c56: SYNCFULL-> UJMPCC_DIRECT_NOTTAKEN_CONDB(tmp10, U3a05) 
       [1923ac00]
     [80400403ef88] U7c58:  tmp14:= ADD_DSZ64(0x00000004, tmp14) SEQW GOTO U3a04
     [000000000000] U7c59:  NOP 
+  <match & patch: 0x3602 -> 0x7c5a>
     [4eff00000000] U7c5a:  unk_eff() 
       [11ba0400]
     [c06350032200] U7c5c:  tmp2:= READURAM( , 0x0050, 64) SEQW GOTO U3604
@@ -219,14 +227,17 @@ UCODE:
       [21b60400]
     [204262000231] U7c60:  MOVETOCREG_DSZ64(tmp1, 0x062) !m2 
     [e96270c00200] U7c61:  MOVETOCREG_BTS_DSZ64( , 0x00000003, 0x070) !m0,m2 SEQW GOTO U283a
+  <match & patch: 0x2078 -> 0x7c62>
     [29620bc00200] U7c62:  MOVETOCREG_BTS_DSZ64( , 0x00000003, 0x00b) !m0,m2 
       [11a83a40]
     [c0480e1bc008] U7c64:  tmp12:= ZEROEXT_DSZ64(0x0000060e) 
     [c062f01f1200] U7c65:  tmp1:= MOVEFROMCREG_DSZ64( , 0x7f0) SEQW GOTO U2834
+  <match & patch: 0x18c4 -> 0x7c66>
     [40330203f23e] U7c66:  tmp15:= SELECTCC_DSZ32_CONDNB(tmp14, 0x00000002) 
       [01a83440]
     [80010103ffc8] U7c68:  tmp15:= OR_DSZ32(0x00000001, tmp15) 
     [c0240203e23e] U7c69:  tmp14:= SHL_DSZ32(tmp14, 0x00000002) SEQW GOTO U18c6
+  <match & patch: 0x78d6 -> 0x7c6a>
     [786ad8e10232] U7c6a:  BTUJB_DIRECT_NOTTAKEN(tmp2, 0x00000003, U78d8) !m0,m1,m2 
       [1198c640]
     [d0629f0b2240] U7c6c:  tmp2:= MOVEFROMCREG_DSZ64( , 0x29f, 32) !m1 
@@ -249,6 +260,7 @@ UCODE:
       [300000c0]
     [c0010003fffe] U7c7c:  tmp15:= OR_DSZ32(tmp14, tmp15) 
     [ad0fe443f00a] U7c7d: LFNCEMARK-> PORTOUT_DSZ32_ASZ16_SC1(0x50e4,  , tmp15) !m2 SEQW URET1
+  <match & patch: 0x61e6 -> 0x7c7e>
     [00080003203a] U7c7e:  tmp2:= ZEROEXT_DSZ32(tmp10) SEQW GOTO U61ea
       [04e1ea8d]
   <match & patch: 0x6908 -> 0x7c80>
@@ -271,6 +283,7 @@ UCODE:
       [01c89600]
     [1902f2880200] U7c90:  MOVETOCREG_OR_DSZ64( , 0x00000002, 0x2f2) !m0,m1 SEQW GOTO U486d
     [000000000000] U7c91:  NOP 
+  <match & patch: 0x31a4 -> 0x7c92>
     [c02510032235] U7c92:  tmp2:= SHR_DSZ32(tmp5, 0x00000010) 
       [11c86d00]
     [800610131e08] U7c94:  tmp1:= XOR_DSZ32(0x00000410, tmp8) 
@@ -291,6 +304,7 @@ UCODE:
       [300000c0]
     [7929e42c0032] U7ca4:  CMPUJNZ_DIRECT_NOTTAKEN(tmp2, 0x00000000, U3be4) !m1,m2 
     [000000000000] U7ca5:  NOP 
+  <match & patch: 0x757a -> 0x7ca6>
     [0007070b9e48] U7ca6:  tmp9:= NOTAND_DSZ32(0x00000207, tmp9) SEQW GOTO U757c
       [21f57c80]
   <match & patch: 0x5ce2 -> 0x7ca8>
@@ -355,6 +369,7 @@ UCODE:
       [300000c0]
     [00080103d008] U7ce0:  tmp13:= ZEROEXT_DSZ32(0x00000001) 
     [033a3973a00b] U7ce1:  tmp10:= STC(0x00007c39) SEQW GOTO U39f6
+  <match & patch: 0x4c32 -> 0x7ce2>
     [40141e03b23d] U7ce2:  tmp11:= BT_DSZ32(tmp13, 0x0000001e) 
       [11b9f640]
     [c0330003bd7b] U7ce4:  tmp11:= SELECTCC_DSZ32_CONDNB(tmp11, tmp5) 
@@ -369,6 +384,7 @@ UCODE:
     [8001a4035d48] U7ced:  tmp5:= OR_DSZ32(0x000000a4, tmp5) 
     [c06430035235] U7cee:  tmp5:= SHL_DSZ64(tmp5, 0x00000030) SEQW GOTO U4c34
       [11cc3480]
+  <match & patch: 0x244a -> 0x7cf0>
     [800155020c08] U7cf0:  rax:= OR_DSZ32(0x00000055, tmp0) SEQW GOTO U0159
     [000000000000] U7cf1:  NOP 
   <match & patch: 0x6ef6 -> 0x7cf2>

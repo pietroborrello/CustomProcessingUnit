@@ -122,11 +122,11 @@ def parse_decrypted_ucode(ucode, output, description):
                 # save patch as file to be parsed
                 print(f'{output.replace(".txt", f".patch_{patch_off:04x}.txt")}')
                 with open(f'{output.replace(".txt", f".patch_{patch_off:04x}.txt")}', 'w') as patch_f:
-                    patch_array = [0] * 0x20
+                    patch_array = [0] * 0x40
                     for off, patch in enumerate(current_raw_patches):
                         if patch & 1:
                             patch_array[off] = patch & 0x3fffffff
-                    ms_array_dump(patch_array,  0x20, patch_f)
+                    ms_array_dump(patch_array,  0x40, patch_f)
                     ms_array_dump(uops + [0]*0x200, 0x200, patch_f)
                     ms_array_dump(seqwords + [0]*0x80, 0x80, patch_f)
 
@@ -145,15 +145,20 @@ def parse_decrypted_ucode(ucode, output, description):
                     patches.append(value)
                     # fprint(f'    {value:08x}')
                     i += 8
-                for raw_patch in patches:
-                    match = raw_patch & 0xfffe
-                    patch = 0x7c00 + ((raw_patch >> 16) & 0xff) * 2
-                    current_patches[patch] = match
-                    current_raw_patches.append(raw_patch)
-                    if raw_patch & 1:
-                        fprint(f'    [{raw_patch:016x}] 0x{match:04x} -> 0x{patch:04x}')
+                for _raw_patch in patches:
+                    def parse_patch(raw_patch):
+                        mode = (raw_patch >> 24) & 0xff
+                        match = raw_patch & 0xfffe
+                        patch = 0x7c00 + ((raw_patch >> 16) & 0xff) * 2
+                        current_patches[patch] = match
+                        current_raw_patches.append(raw_patch)
+                        return mode, match, patch
+                    if _raw_patch & 1:
+                        mode1, match1, patch1 = parse_patch(_raw_patch & 0x7fffffff)
+                        mode2, match2, patch2 = parse_patch(_raw_patch >> 0x1f)
+                        fprint(f'    [{_raw_patch:016x}] 0x{mode1:02x}: 0x{match1:04x} -> 0x{patch1:04x}, 0x{mode2:02x}: 0x{match2:04x} -> 0x{patch2:04x}')
                     else:
-                        fprint(f'    [{raw_patch:016x}]')
+                        fprint(f'    [{_raw_patch:016x}]')
 
             elif ucode[i] == 0x5:
                 size = unpack("<H", ucode[i+1: i+3])[0]
