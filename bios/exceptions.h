@@ -265,12 +265,14 @@ asm (
 //
 CONST UINT32 mErrorCodeFlag = 0x20227d00uL;
 
-void set_irq_handler(idt_t *idt, int vector)
+void set_irq_handler(idt_t *idt, int vector, void (*callback)(void))
 {
     assert(vector >= 0 && vector < idt->entries, L"invalid vector\n");
     
     void *asm_handler;
-    if (((mErrorCodeFlag >> vector) & 1) == 0) {
+    if (callback != NULL) {
+        asm_handler = callback;
+    } else if (((mErrorCodeFlag >> vector) & 1) == 0) {
         asm_handler = irq_handler;
     } else {
         asm_handler = irq_handler_err_code;
@@ -293,8 +295,8 @@ void except_irq(void) {
     if (local_jmp_buf.__rip != 0) {
         except_resume(&local_jmp_buf);
     } else {
-        CONST CHAR16 error[] = L"ABORTED";
-        UINTN size = sizeof(error);
+        CONST CHAR16 *error = L"ABORTED";
+        UINTN size = sizeof(L"ABORTED");
         void* ExitData = AllocatePool(size);
         StrCpy(ExitData, error);
         Exit(EFI_ABORTED, size, ExitData);
@@ -308,7 +310,10 @@ void irq_handler_c(idt_ctx_t *ctx) {
     // this ties the handler to longjmp machinery, but it seems the print crashes
     // the system if put in except_irq, not sure why
     if (exception_jmp_buf.__rip == 0) {
-        Print(L"[-] IRQ ABORTED\n");
+        Print(L"[-] IRQ ABORTED:\n");
+        Print(L"  rip: 0x%lx -> 0x%016lx\n", ctx->rip, *(unsigned long*)ctx->rip);
+        Print(L"  cs: 0x%lx\n", ctx->cs);
+        Print(L"  rflags: 0x%lx\n", ctx->rflags);
     }
 
     ctx->rip = (unsigned long)except_irq;
@@ -320,9 +325,12 @@ void setup_exceptions(void) {
     read_idt(&idt);
     // dump_idt(&idt);
 
-    set_irq_handler(&idt, EXCEPT_X64_DIVIDE_ERROR);
-    set_irq_handler(&idt, EXCEPT_X64_GP_FAULT);
-    set_irq_handler(&idt, EXCEPT_X64_PAGE_FAULT);
+    set_irq_handler(&idt, EXCEPT_X64_DIVIDE_ERROR, NULL);
+    set_irq_handler(&idt, EXCEPT_X64_GP_FAULT, NULL);
+    set_irq_handler(&idt, EXCEPT_X64_PAGE_FAULT, NULL);
+    set_irq_handler(&idt, EXCEPT_X64_BREAKPOINT, NULL);
+    set_irq_handler(&idt, EXCEPT_X64_INVALID_OPCODE, NULL);
+    set_irq_handler(&idt, EXCEPT_X64_DEBUG, NULL);
     // dump_idt(&idt);
     return;
 }

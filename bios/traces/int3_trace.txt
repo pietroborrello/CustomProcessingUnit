@@ -1,0 +1,190 @@
+[   149] U0a78:  tmp2:= ZEROEXT_DSZ32(0x00000003) 
+[     0] U0a79:  tmp4:= ZEROEXT_DSZ64N(IMM_MACRO_ALIAS_RIP) !m0,m1 
+[   150] U0a7c:  tmp8:= MOVEFROMCREG_DSZ64( , 0x79e) 
+[     0] U0a7d: LFNCEMARK-> tmp6:= MOVE_DSZ32(0x00000000) 
+[   151] U0a7a:  tmp3:= ZEROEXT_DSZ32(0x00000006) 
+[     0] U2419: LFNCEMARK-> BTUJB_DIRECT_NOTTAKEN(tmp0, U6a35, tmp2) !m1 
+[   152] U241a:  UJMPCC_DIRECT_NOTTAKEN_CONDZ(tmp10, U5660) SEQW GOTO U27ca
+[   153] U0a7e:  tmp10:= unk_203( , 0x00000001) SEQW GOTO U2415
+[   153] U2414:  NOP 
+[     0] U2415:  TESTUSTATE( , SYS, !UST_VMX_DUAL_MON | UST_VMX_GUEST) !m0,m1 ? SEQW GOTO U241a
+[     0] U27c9:  tmp8:= MOVEFROMCREG_DSZ64( , 0x79e) 
+[   153] U27ca: LFNCEWAIT-> tmp10:= MOVEFROMCREG_DSZ64( , 0x7fe) 
+[   168] U27cc:  tmp10:= READAFLAGS( , tmp10) !m2 
+[     0] U27cd: LFNCEMARK-> MOVETOCREG_DSZ64( , 0x00000000, 0x01c) 
+[   169] U27ce:  tmp9:= MOVE_DSZ32(tmp10) 
+[   169] U27d0:  tmp7:= ZEROEXT_DSZ32(0x00000021) 
+[     0] U27d1:  tmp14:= MOVETOCREG_DSZ64(0x00000009, 0x000) 
+[   170] U27d2:  SAVEUIP_REGOVR( , 0x01, U27d4, 0xcb30) !m0 SEQW GOTO U3722
+[     0] U3721: SYNCMARK-> BTUJB_DIRECT_NOTTAKEN(tmp1, 0x0000001d, U4f51) SEQW GOTO U3700
+[   170] U3722:  tmpv1:= ZEROEXT_DSZ32(0x00000502) 
+[   171] U1a00:  TESTUSTATE( , UCODE, 0x3000) ? SEQW GOTO U1db2
+[     0] U1a01:  tmpv0:= READURAM( , 0x0012, 64) 
+[   171] U3724:  tmpv1:= BTS_DSZ32(tmpv1, 0x00000010) SEQW GOTO U1a00
+[     0] U3725:  NOP 
+[   172] U0dc8:  tmp15:= READUIP_REGOVR(0x01) !m0 
+[     0] U0dc9:  tmp3:= MOVEFROMCREG_DSZ64( , 0x7f9, 32) !m1 
+[     0] U1db1:  TESTUSTATE( , UCODE, UST_MSLOOPCTR_NONZERO) ? SEQW GOTO U1da6
+[   172] U1db2:  URET(0x01) !m0 
+[   172] U27d4:  tmp12:= MOVEFROMCREG_DSZ64( , 0x065) SEQW GOTO U0dc6
+[     0] U27d5:  STADPPHYS_DSZ64_ASZ64_SC1(0x00000200, mode=0x18, tmp11, tmp5) 
+caseD_dc5:
+[     0] U0dc5: LFNCEMARK-> tmp8:= MOVETOCREG_DSZ64( , 0x00000000, 0x01c) 
+[   173] U0dc6:  SAVEUIP( , 0x01, U3e71) !m0 
+[   179] U0dca: LFNCEWTMRK-> BTUJB_DIRECT_NOTTAKEN(tmp3, 0x00000000, U0dcc) SEQW GOTO U1db2
+[   186] U3e78:  tmp3:= CMOVCC_DSZ64_CONDB(tmp11, tmp3) 
+[     0] U3e79:  tmp14:= BT_DSZ32(tmp14, 0x00000018) 
+[   187] U3e74:  tmp14:= BT_DSZ32(tmp14, 0x00000013) 
+[     0] U3e75:  tmp11:= READURAM( , 0x006e, 64) 
+[   187] U3e76:  tmp11:= MOVEMERGEFLGS_DSZ64(tmp11, tmp14) 
+[     0] U3e71:  tmp3:= RDSEGFLD(UNK_SEG_09, UNK_FLD_0c) 
+[   188] U3e72:  tmp3:= ADD_DSZN(tmp3, tmp4) !m1 
+[   188] U3e7c:  tmp11:= MOVEMERGEFLGS_DSZ64(tmp11, tmp14) 
+[     0] U3e7d:  tmp3:= CMOVCC_DSZ64_CONDB(tmp11, tmp3) 
+[   189] U3e7e:  tmp0:= SUB_DSZ32(0x00000003, tmp2) 
+[   189] U3e80:  tmp11:= MOVEFROMCREG_DSZ64( , 0x065) 
+[     0] U3e81:  tmp11:= SELECTCC_DSZ32_CONDNZ(tmp0, tmp11) 
+[   190] U3e7a:  tmp11:= READURAM( , 0x004a, 64) 
+[   193] U3e82:  tmp3:= SUB_DSZN(tmp11, tmp3) !m1 
+[   193] U3e84: LFNCEWAIT-> MOVETOCREG_DSZ64(tmp3, 0x71a) 
+[     0] U3e85:  WRITEURAM(tmp3, 0x003f, 64) 
+[   196] U3e88:  TESTUSTATE( , SYS, !UST_VMX_DUAL_MON | UST_VMX_GUEST) !m0,m1 ? SEQW GOTO U3e95
+[     0] U3e89:  tmp1:= CONCAT_DSZ32(tmp13, tmp1) 
+[   197] U3e86:  MOVETOCREG_DSZ64(tmp7, 0x00b) 
+[   197] U3e94:  MOVETOCREG_DSZ64(tmp0, 0x070) 
+[     0] U3e95:  tmp0:= ZEROEXT_DSZ32(0x00000004) 
+[   199] U3e96:  tmp0:= unk_204(tmp0, 0x00000003) 
+[   199] U3e98:  MOVETOCREG_OR_DSZ64( , 0x0000000c, 0x005) 
+[     0] U3e99:  tmp3:= READURAM( , 0x001f, 64) 
+[   199] U3e9a:  tmp3:= NOTAND_DSZ32(0x00000007, tmp3) 
+[   203] U3e9c:  WRITEURAM(tmp3, 0x001f, 32) 
+[     0] U3e9d:  TESTUSTATE( , SYS, !UST_8086_MODE) !m0,m1 ? SEQW GOTO U3ea0
+[   203] U3ea2:  tmp2:= SHL_DSZ32(tmp2, 0x00000003) 
+[   204] U3ea0:  tmp1:= SHL_DSZ32(tmp2, tmp0) 
+[     0] U3ea1:  tmp1:= ZEROEXT_DSZ16(tmp1) 
+[   204] U3ea4:  tmp2:= ZEROEXT_DSZ16(tmp2) 
+[     0] U3ea5: SYNCWAIT-> tmp0:= unk_d61(tmp1) 
+[   204] U3ea6:  tmp11:= SHR_DSZ64(tmp0, 0x0000002d) 
+[   206] U3ea8:  tmp11:= AND_DSZ32(0x00000003, tmp11) 
+[     0] U3ea9:  tmp11:= SUB_DSZ32(tmp8, tmp11) 
+[   207] U3eaa:  UJMPCC_DIRECT_NOTTAKEN_CONDL(tmp11, U07fe) 
+[   207] U3eac:  tmp13:= MOVEFROMCREG_DSZ64( , 0x2df, 32) !m1 
+[     0] U3ead:  tmp7:= SHR_DSZ64(tmp13, 0x0000002f) 
+[   211] U3eae:  tmp13:= SHL_DSZ32(tmp13, 0x00000008) 
+[   213] U3eb0:  tmp7:= AND_DSZ32(tmp7, tmp13) 
+[     0] U3eb1:  tmp7:= AND_DSZ32(0x00000008, tmp7) 
+[   216] U3eb6:  TESTUSTATE( , SYS, UST_OP_SIZE_32BIT) !m1 ? SEQW GOTO U64f0
+[   218] U3eb2:  tmp13:= NOTAND_DSZ32(tmp7, 0x00034100) 
+[   219] U3eb4:  tmp7:= NOTAND_DSZ32(tmp13, tmp10) 
+[     0] U3eb5:  tmp14:= BTR_DSZ32(tmp14, 0x0000000e) 
+[   221] U3eb8:  unk_e7b(tmp0, tmp1) !m1,m2 
+[     0] U3eb9: LFNCEMARK-> tmp3:= unk_d61(tmp1) SEQW GOTO U64f5
+[   228] U64f4: LFNCEMARK-> UJMPCC_DIRECT_NOTTAKEN_CONDO(tmp11, tmp11) 
+[     0] U64f5:  tmp8:= SHR_DSZ64(tmp0, 0x0000001f) 
+[   228] U6500:  TESTUSTATE( , SYS, UST_OP_SIZE_32BIT) !m1 ? SEQW GOTO U6505
+[     0] U6501:  tmp11:= AND_DSZ32(0x00000007, tmp12) 
+[   229] U64f8:  tmp2:= NOTAND_DSZ32(tmp8, tmp7) 
+[     0] U64f9:  tmp7:= NOTAND_DSZ32(0x0000003f, tmp14) 
+[   229] U6502:  tmp1:= SELECTCC_DSZ32_CONDZ(tmp11, 0x00000004) 
+[   229] U6504:  tmp8:= OR_DSZ32(tmp1, tmp8) 
+[     0] U6505: LFNCEWTMRK-> MOVETOCREG_DSZ64(tmp2, 0x7fe) SEQW GOTO U5b2a
+[   230] U64f6:  tmp8:= NOTAND_DSZ32(tmp8, 0x00000200) 
+[   231] U64fa:  tmp7:= OR_DSZ32(0x00000008, tmp7) 
+[   231] U64fc:  tmp8:= AND_DSZ32(0x00000003, tmp6) 
+[     0] U64fd:  tmp8:= SELECTCC_DSZ32_CONDZ(tmp8, 0x00000001) 
+[   232] U64fe:  tmp12:= SHR_DSZ64(tmp0, 0x00000020) 
+[     0] U5b2d:  tmp13:= ZEROEXT_DSZ64(tmp0) 
+[   242] U5b2e:  TESTUSTATE( , SYS, UST_OP_SIZE_32BIT) !m1 ? SEQW GOTO U654d
+[   243] U5b30:  tmp8:= MOVETOCREG_DSZ64(tmp8, 0x6c5) 
+[     0] U5b31:  tmp1:= ZEROEXT_DSZ32(0x00000803, tmp8) 
+[   244] U6560:  tmp8:= SHL_DSZ64(tmp1, 0x00000018) 
+[     0] U6561:  tmp8:= MOVETOCREG_OR_DSZ64(tmp8, 0x752, tmp1) 
+[   245] U5b32:  tmp14:= SAVEUIP(0x01, U4dc9) !m0 SEQW GOTO U6560
+[   245] U6562: LFNCEWAIT-> MOVETOCREG_DSZ64(tmp7, 0x000) 
+[   248] U2c00:  AETTRACE( , 0x08, IMM_MACRO_ALIAS_INSTRUCTION) !m0 
+[     0] U2c01:  tmp14:= READUIP_REGOVR(0x01) !m0 
+[   250] U2c02: LFNCEWAIT-> tmp0:= unk_d61(tmp2) 
+[   250] U4dc8:  MOVETOCREG_BTS_DSZ64( , 0x00000001, 0x289) !m1,m2 SEQW GOTO U05f6
+[     0] U4dc9: LFNCEMARK-> tmp14:= unk_e6b(tmp0, tmp2) !m1,m2 
+[   250] U6564:  MOVETOCREG_DSZ64(tmp8, 0x01b) !m2 SEQW GOTO U2c01
+[     0] U6565:  tmp15:= RDSEGFLD(SS, FLGS) 
+[   252] U2c04:  tmp1:= unk_d61(tmp2) 
+[     0] U2c05:  tmp0:= CMOVCC_DSZ64_CONDNB(tmp1, tmp0) SEQW URET1
+[   252] U4dcc:  tmp8:= MOVETOCREG_DSZ64(tmp8, 0x7f5) 
+[     0] U4dcd:  tmp15:= SHR_DSZ64(tmp0, 0x00000028) 
+[   253] U4dca:  tmp8:= ZEROEXT_DSZ32(0x00002000, tmp8) 
+[   254] U3c00:  tmp3:= ZEROEXT_DSZ16(tmp13, tmp12) 
+[     0] U3c01:  SAVEUIP( , 0x01, U068e) !m0 
+[   254] U4dce:  tmp14:= MOVEMERGEFLGS_DSZ32(0x00003aa5, tmp14) 
+[   254] U4dd0:  tmp12:= ZEROEXT_DSZ16(tmp13, tmp12) 
+[     0] U4dd1:  tmp3:= CONCAT_DSZ32(tmp3, tmp12) 
+[   256] U3c02:  tmp14:= CMOVCC_DSZ32_CONDO(tmp14, 0x00002e42) 
+[   256] U3c04:  UFLOWCTRL(tmp8, tmp14, URET1) 
+[     0] U3c05:  tmp7:= NOTAND_DSZ32(0x00000040, tmp7) 
+[   256] U3c08:  TESTUSTATE( , SYS, !UST_OP_SIZE_32BIT) !m0,m1 ? SEQW GOTO U3c0c
+[     0] U3c09: LFNCEWAIT-> tmp1:= RDSEGFLD(UNK_SEG_09, BASE) 
+[   256] U3c0c: LFNCEWAIT-> tmp1:= RDSEGFLD(UNK_SEG_09, LIMIT) 
+[     0] U3c0d:  MOVETOCREG_DSZ64(tmp1, 0x410) 
+[   256] U4dd2:  MOVETOCREG_DSZ64( , 0x00000000, 0x78e) SEQW GOTO U3c01
+[   257] U3c06:  tmp7:= OR_DSZ32(0x00000400, tmp7) 
+[   268] U3c0e:  tmp1:= ADD_DSZ32(0x00000001, tmp1) 
+[   272] U3c10: LFNCEMARK-> MOVETOCREG_DSZ64(tmp1, 0x700) SEQW URET1
+[     0] U3c11:  SAVEUIP_REGOVR(0x01, U3c12, 0x0008) !m0 SEQW GOTO U2b0d
+[     0] U068d:  NOP 
+[   273] U068e:  URET(0x01) !m0 
+[   280] U3aa4: LFNCEWTMRK-> unk_256() !m1 SEQW URET1
+[     0] U3aa5:  BTUJB_DIRECT_NOTTAKEN(tmp10, 0x00000011, U07fe) 
+[   281] U3aa6:  TESTUSTATE( , UCODE, !0x0008) !m0 ? SEQW GOTO U2e61
+[   284] U3aa8:  TESTUSTATE( , UCODE, 0x0010) ? SEQW GOTO U3ab0
+[     0] U3aa9:  tmp2:= RDSEGFLD(TSS, SEL) 
+[   285] U3ab0:  rsp:= AND_DSZN(0xfffffffffffffff0, rsp) !m1 
+[     0] U3ab1:  tmp8:= RDSEGFLD(SS, SEL) SEQW GOTO U2e5c
+[   287] U2e5c: LFNCEWAIT-> STADPPHYS_DSZ64_ASZ64_SC1(rsp, 0xfffffffffffffff8, mode=0x0a,  , tmp8) 
+[     0] U2e5d:  STADPPHYS_DSZ64_ASZ64_SC1(rsp, 0xfffffffffffffff0, mode=0x0a,  , tmp5) 
+[     0] U1dd5:  TESTUSTATE( , UCODE, !0x0008) !m0 ? SEQW GOTO U2e61
+[   288] U1dd6:  STAD_DSZN_ASZ32_SC1(rsp, SS,  , IMM_MACRO_fb, mode=0x0a, tmp9) !m0,m1 
+[   289] U2e5e:  rsp:= SUB_DSZ64(0x00000010, rsp) 
+[   289] U2e60:  TESTUSTATE( , UCODE, 0x0008) ? SEQW GOTO U1dd6
+[     0] U2e61: SYNCMARK-> tmp1:= RDSEGFLD(CS, SEL) 
+[   291] U1dd8:  tmp1:= RDSEGFLD(CS, SEL) 
+[     0] U1dd9:  STAD_DSZN_ASZ32_SC1(rsp, SS,  , IMM_MACRO_f3, mode=0x0a, tmp1) !m0,m1 
+[   291] U1dda:  STAD_DSZN_ASZ32_SC1(rsp, SS,  , IMM_MACRO_eb, mode=0x0a, tmp4) !m0,m1 
+[     0] U1de1:  rsp:= SUB_DSZN(IMM_MACRO_ALIAS_DATASIZE, rsp) !m0,m1 
+[   292] U1de2: LFNCEMARK-> unk_de3(tmp3) 
+[   293] U1de8: LFNCEMARK-> STADPPHYSTICKLE_DSZ64_ASZ64_SC1(0x000004a8, mode=0x01, tmp1, 0x00000000) 
+[     0] U1de9:  tmp1:= READURAM( , 0x0070, 64) 
+[   294] U1ddc:  rsp:= SUB_DSZN(IMM_MACRO_1b, rsp) !m0,m1 
+[     0] U1ddd:  TESTUSTATE( , UCODE, 0x0004) ? SEQW GOTO U1de2
+[   295] U1de4: LFNCEMARK-> BTUJB_DIRECT_NOTTAKEN(tmp10, 0x00000011, U01ca) 
+[     0] U1de5:  TESTUSTATE( , SYS, !UST_VMX_DUAL_MON) !m0,m1 ? SEQW GOTO U1de9
+[   295] U1dea:  tmp1:= BTR_DSZ64(tmp1, 0x0000002e) 
+[   296] U1dec: LFNCEWAIT-> MOVETOCREG_SHR_DSZ64(tmp1, 0x00000020, 0x008) 
+[     0] U1ded:  WRITEURAM(tmp1, 0x0170, 64) 
+[   303] U1df0: LFNCEMARK-> MOVETOCREG_OR_DSZ64( , 0x00000003, 0x005) !m0 
+[     0] U1df1:  TESTUSTATE( , UCODE, 0x0400) ? SEQW GOTO U2784
+[   303] U1df4:  AETTRACE( , tmp0, 0x0c) SEQW GOTO U2784
+[     0] U1df5:  TESTUSTATE( , UCODE, 0x3000) ? SEQW URET1
+[   303] U2784: LFNCEWAIT-> FETCHFROMEIP1_ASZ64( , tmp3) !m1 
+[     0] U2785:  tmp4:= RDSEGFLD(UNK_SEG_09, SEL+FLGS+LIM) 
+[   304] U1dee:  NOP 
+[   305] U1df2:  tmp0:= READURAM( , 0x003f, 64) 
+[   311] U2786:  WRSEGFLD(tmp4, CS, SEL+FLGS+LIM) 
+[   311] U2788:  tmp4:= RDSEGFLD(UNK_SEG_09, BASE) 
+[     0] U2789:  WRSEGFLD(tmp4, CS, BASE) 
+[   312] U278a:  tmp4:= RDSEGFLD(SS_USERM, SEL+FLGS+LIM) 
+[   314] U278c:  WRSEGFLD(tmp4, SS, SEL+FLGS+LIM) 
+[     0] U278d:  tmp4:= RDSEGFLD(SS_USERM, BASE) 
+[   317] U278e:  WRSEGFLD(tmp4, SS, BASE) 
+[   319] U2790:  rsp:= ZEROEXT_DSZ64N(rsp) !m1 
+[     0] U2791: MSSTOP-> MJMPTARGET_INDIRECT_ASZ64( , tmp3) !m1 
+[   319] U2794:  UJMPCC_DIRECT_NOTTAKEN_CONDZ(tmp0, U06e6) 
+[     0] U2795: LFNCEWAIT-> NOP SEQW UEND3
+[   320] U2792:  tmp0:= PSELECT_CPL0( , 0x00000001) 
+[     0] U081d:  SAVEUIP( , 0x01, U6995) !m0 SEQW GOTO U1cfa
+[   329] U081e: LFNCEMARK-> unk_25e( , tmp2) SEQW UEND0
+[   330] U09b4:  CMPUJZ_DIRECT_NOTTAKEN(tmp3, 0x00000001, U2711) !m1 
+[     0] U09b5:  UJMPCC_DIRECT_NOTTAKEN_CONDZ(tmp1, U2875) 
+[   331] U09b2:  tmp3:= unk_20d( , tmp1) 
+[   331] U09b6:  tmp2:= OR_DSZ32(0x00000010, tmp2) SEQW GOTO U081e
+[   333] U09b0:  tmp2:= unk_00f(0x00000008) 
+[     0] U09b1:  tmp1:= unk_20c( , 0x00000001) 

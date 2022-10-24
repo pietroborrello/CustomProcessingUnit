@@ -116,6 +116,19 @@ static uint64_t inline rdtscp(void) {
   return a;
 }
 
+static uint64_t inline rdtsc(void) {
+  uint64_t a, d;
+  asm volatile("rdtsc" : "=a"(a), "=d"(d)::);
+  a = (d << 32) | a;
+  return a;
+}
+
+static uint32_t rdrand(void) {
+    uint32_t rnd32 = 0;
+    asm volatile("rdrand %0\n":"=r"(rnd32):);
+    return rnd32;
+}
+
 // from https://wiki.osdev.org/Loading_files_under_UEFI
 EFI_STATUS get_current_rootfs(EFI_HANDLE image, EFI_FILE_HANDLE* Root) {
     EFI_LOADED_IMAGE *loaded_image = NULL;                  /* image interface */
@@ -530,6 +543,16 @@ static UINTN ldat_read(UINTN ucode_routine, UINTN pdat_reg, UINTN array_sel, UIN
     return resA;
 }
 
+void enable_match_and_patch(void) {
+    UINTN mp = crbus_read(0x692);
+    crbus_write(0x692, mp & ~1uL);
+}
+
+void disable_match_and_patch(void) {
+    UINTN mp = crbus_read(0x692);
+    crbus_write(0x692, mp | 1uL);
+}
+
 void init_match_and_patch(void) {
     if (current_glm_version == GLM_OLD) {
         // Move the patch at U7c5c to U7dfc, since it seems important for the CPU
@@ -573,9 +596,7 @@ void init_match_and_patch(void) {
         Print(L"[init FAILED]\nunsupported GLM\n");
         Exit(EFI_SUCCESS, 0, NULL);
     }
-    // enable match & patch
-    UINTN mp = crbus_read(0x692);
-    crbus_write(0x692, mp & ~1uL);
+    enable_match_and_patch();
 }
 
 void hook_match_and_patch(UINTN entry_idx, UINTN ucode_addr, UINTN patch_addr) {
@@ -801,6 +822,20 @@ BOOLEAN blacklisted_instruction(UINTN address) {
     if (address == 0x008e) return TRUE;
     if (address == 0x69d0) return TRUE;
 
+    // ud2
+    if (address == 0xdc0) return TRUE;
+
+    // int3
+    if (address == 0x3a2c) return TRUE; // LFNCEWAIT-> MOVETOCREG_DSZ64(tmpv0, 0x6c0)
+    if (address == 0x33e4) return TRUE; // SYNCFULL-> MOVETOCREG_DSZ64(tmp1, 0x7f5) !m2
+    if (address == 0x3d34) return TRUE; // tmp14:= SAVEUIP(0x01, U0664) !m0 SEQW GOTO U5d81
+    if (address == 0x3e70) return TRUE; // NOP SEQW GOTO U1f9a
+    if (address == 0x605c) return TRUE; // GENARITHFLAGS(tmp0, tmp7) !m2 SEQW UEND
+
+    // int1
+    if (address == 0x3e94) return TRUE; // MOVETOCREG_DSZ64(tmp0, 0x070)
+
+
     // The next addresses in the black list where crashing if the match&patch was not
     // reinitialized at every iteration. Keep them for future reference
     // if (address == 0x3c8) return TRUE;
@@ -993,6 +1028,7 @@ efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
 
     setup_exceptions();
     activate_udebug_insts();
+    enable_match_and_patch();
 
     if (argc < 2) {
         usage();

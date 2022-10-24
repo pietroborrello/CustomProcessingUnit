@@ -120,6 +120,14 @@ g_dst_mnem = (
  ("tmp0", "mm0"))       # 0x1f
 g_dst_mnem += g_idq_src_dst_mnem
 
+g_macro_alias = {
+    "IMM_MACRO_ALIAS_RIP": 0x04,
+    "IMM_MACRO_ALIAS_STi": 0x05,
+    "IMM_MACRO_ALIAS_MSLOOPCTR": 0x08,
+    "IMM_MACRO_ALIAS_DATASIZE": 0x0b,
+    "IMM_MACRO_ALIAS_INSTRUCTION": 0x10,
+}
+
 g_uop_lables = {}
 g_uop_cregs = {}
 g_uop_fscp_regs = {}
@@ -1217,7 +1225,7 @@ def is_empty(uop):
     return uop.strip() == '' or uop.startswith('#')
 
 def is_three_sources(opcode):
-    for op in  {'STAD_', 'STADPPHYS_', 'STADPPHYSTICKLE_', 'PORTOUT_', 'STADSTGBUF_'}:
+    for op in  {'STAD_', 'STADTICKLE_','STADPPHYS_', 'STADPPHYSTICKLE_', 'PORTOUT_', 'STADSTGBUF_'}:
         if opcode.startswith(op):
             return True
     return False
@@ -1272,6 +1280,11 @@ def assemble_uop(uop, modifiers, labels):
         # reg operand
         src0_id = g_reg_to_id[src0]
         src0_is_imm = False
+    elif src0 in g_macro_alias:
+        # alias operand
+        src0_id = g_macro_alias[src0]
+        src0_is_imm = True
+        m0 = 1
     else:
         # imm operand
         src0_id = int(src0, 16)
@@ -1342,7 +1355,7 @@ NOP_SEQWORD = 0x0000300000c0
 # END_SEQWORD = 0x197ec80 # GOTO uend in glm old
 END_SEQWORD = 0x130000f2 # LFENCEWAIT + UEND0
 END_UNKOWN_UOP = 'unk_256() !m1'
-def assemble_ucode(ucode, output):
+def assemble_ucode(ucode, avoid_unk_256, output):
     triads = [[]]
     instructions = [[]]
     labels = dict()
@@ -1358,7 +1371,9 @@ def assemble_ucode(ucode, output):
     # add the unknown operation before the uend to make it fast
     # FAST IN THE SENSE THAT TAKES 300 CYCLES INSTEAD OF 59 MILLIONS CYCLES
     # SO DO NOT REMOVE THIS
-    if uops[-1] != END_UNKOWN_UOP:
+    # Note: apparently it also messes up when hooking instructions (mostly <0x1000)
+    # and be still fast without, so seems to be needed sometimes and sometimes not
+    if not avoid_unk_256 and uops[-1] != END_UNKOWN_UOP:
         uops.append(END_UNKOWN_UOP)
 
     for uop in uops:
@@ -1537,8 +1552,9 @@ cpuid_ = ''
 @click.option('-u','--uops',type=str,default=None)
 @click.option('-t','--tracefile',type=str,default=None)
 @click.option('-i','--ucodefile',type=str,default=None)
+@click.option('--avoid_unk_256',is_flag=True,default=False)
 @click.option('-o','--output',type=str,default=None)
-def main(cpuid, disasm, seqwords, uops, tracefile, ucodefile, output):
+def main(cpuid, disasm, seqwords, uops, tracefile, ucodefile, avoid_unk_256, output):
 
     global cpuid_
     cpuid_ = cpuid
@@ -1562,7 +1578,7 @@ def main(cpuid, disasm, seqwords, uops, tracefile, ucodefile, output):
             exit(1)
         with open(ucodefile, 'r') as f:
             ucode = f.read()
-        assemble_ucode(ucode, output)
+        assemble_ucode(ucode, avoid_unk_256, output)
 
 glm_ucode_disasm_init()
 if __name__ == '__main__':
