@@ -861,7 +861,9 @@ INTN get_trace_clock_at(UINTN tracing_addr) {
 
     // [TRACED INSTRUCTION HERE]
 
-    wrmsr(IA32_BIOS_UPDT_TRIG, (unsigned long)(_ucode_data+48));
+    if (try_except(&exception_jmp_buf) == 0) {
+        asm volatile("int3\n");
+    }
 
     // [-----------------------]
 
@@ -994,6 +996,58 @@ int access_time_flush(void* ptr) {
 
     return (uint64_t)(sum / ACCESS_REPETITIONS);
 }
+
+uint8_t ids[0x10000] = {0};
+static void test1(void) {
+    Print(L"[test1]: %lx\n", test1);
+    #define ITS 0x100ff
+    UINTN resA=0; UINTN resB=0; UINTN resC=0; UINTN resD=0;
+    init_match_and_patch();
+    stgbuf_write(0xba00, (UINTN) ids);
+    #include "ucode_patches/fastbp.h"
+    Print(L"patching addr: %08lx - ram: %08lx\n", addr, ucode_addr_to_patch_addr(addr));
+    patch_ucode(addr, ucode_patch, sizeof(ucode_patch) / sizeof(ucode_patch[0]));
+    hook_match_and_patch(0, 0xc40, 0x7c00);
+    uint64_t start = rdtscp();
+    int i;
+    for(i = 0; i < ITS; i++) {
+        // if (try_except(&exception_jmp_buf) == 0) {
+            asm volatile(
+                ".byte 0xf1\n"
+            );
+        // }
+    }
+    uint64_t end = rdtscp();
+    init_match_and_patch();
+    for (int j = 0; j < 0x10000; j++)
+        if (ids[j])
+          Print(L"%lx: %lx\n", j, ids[j]);
+    Print(L"%lx %lx %lx %lx\n", resA, resB, resC, resD);
+    Print(L"its: %lx %lx\n", stgbuf_read(0xba00), i);
+    Print(L"start: %lx end: %lx\n", start, end);
+    Print(L"[done]: %ld, %ld\n", end-start, (end-start)/ITS);
+}
+
+static void test2(void) {
+    Print(L"[test2]: %lx\n", test2);
+    #define ITS 0x100ff
+    uint64_t start = rdtscp();
+    int i;
+    for(i = 0; i < ITS; i++) {
+        // if (try_except(&exception_jmp_buf) == 0) {
+            asm volatile(
+                ".byte 0xcc\n"
+            );
+        // }
+    }
+    uint64_t end = rdtscp();
+    for (int j = 0; j < 0x10000; j++)
+        if (int3_ids[j])
+          Print(L"%lx: %lx\n", j, int3_ids[j]);
+    Print(L"start: %lx end: %lx\n", start, end);
+    Print(L"[done]: %ld, %ld\n", end-start, (end-start)/ITS);
+}
+
 EFI_STATUS
 EFIAPI
 efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
@@ -1031,7 +1085,9 @@ efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
     enable_match_and_patch();
 
     if (argc < 2) {
-        usage();
+        // usage();
+        test1();
+        test2();
         return EFI_SUCCESS;
     } else if (argc > 1) {
         if (argv[1][0] == L'c') {
