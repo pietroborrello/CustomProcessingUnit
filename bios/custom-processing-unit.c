@@ -850,6 +850,12 @@ INTN unwrap_clock(UINTN value) {
     return (value &  0xffffffffffffffL) * 0x39 + (value >> 0x37);
 }
 
+static volatile UINTN var;
+static void func(UINTN rdi) {
+    var = rdi;
+    return;
+}
+
 #define STGBUF_COUNTER (0xba00)
 #define CRBUS_CLOCK (0x2000 | 0x2d7)
 INTN get_trace_clock_at(UINTN tracing_addr) {
@@ -1048,6 +1054,33 @@ static void test2(void) {
     Print(L"[done]: %ld, %ld\n", end-start, (end-start)/ITS);
 }
 
+static void test3(void) {
+    Print(L"[test3]: %lx\n", test3);
+    Print(L"func: %lx\n", func);
+    UINTN resA = 0;
+    init_match_and_patch();
+    #include "ucode_patches/condhwbp.h"
+    Print(L"patching addr: %08lx - ram: %08lx\n", addr, ucode_addr_to_patch_addr(addr));
+    patch_ucode(addr, ucode_patch, sizeof(ucode_patch) / sizeof(ucode_patch[0]));
+    Print(L"hooking entry: %02lx, addr: %04lx, hook_addr: %04lx\n", hook_entry, addr, hook_address);
+    hook_match_and_patch(hook_entry, hook_address, addr);
+
+    // setup hw bp on func
+    asm volatile(
+        "mov %%rax, %%dr0\n"
+        "mov %%dr7, %%rax\n"
+        "or $1, %%rax\n"
+        "mov %%rax, %%dr7\n"
+        : "=a"(resA)
+        : "a" (func)
+    );
+    Print(L"func(0)\n");
+    func(0);
+    Print(L"func(0x1337)\n");
+    func(0x1337);
+    Print(L"[done]: %lx\n", resA);
+}
+
 EFI_STATUS
 EFIAPI
 efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
@@ -1086,8 +1119,9 @@ efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
 
     if (argc < 2) {
         // usage();
-        test1();
-        test2();
+        // test1();
+        // test2();
+        test3();
         return EFI_SUCCESS;
     } else if (argc > 1) {
         if (argv[1][0] == L'c') {

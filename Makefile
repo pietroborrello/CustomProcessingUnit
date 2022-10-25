@@ -14,6 +14,7 @@ build-ucode:
 	uasm-lib/uasm.py -i bios/ucode_patches/time_access_hook.u -o ./bios/ucode_patches/time_access_hook.h
 	uasm-lib/uasm.py -i bios/ucode_patches/msr2cr_dump.u -o ./bios/ucode_patches/msr2cr_dump.h
 	uasm-lib/uasm.py -i bios/ucode_patches/fastbp.u --avoid_unk_256 -o ./bios/ucode_patches/fastbp.h
+	uasm-lib/uasm.py -i bios/ucode_patches/condhwbp.u --avoid_unk_256 -o ./bios/ucode_patches/condhwbp.h
 
 build-cpu:
 	xxd -i bios/glm-intel-ucode/06-5c-09 > bios/glm-intel-ucode/06-5c-09.h
