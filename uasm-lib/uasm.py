@@ -1351,6 +1351,27 @@ def assemble_uop(uop, modifiers, labels):
 
     return uop_bin
 
+def parse_directives(ucode :str):
+    hook_address = None
+    hook_entry = None
+    address = None
+    uops = ucode.split('\n')
+
+    while uops[0].startswith("."):
+        if uops[0].startswith(".org"):
+            address = int(uops[0].replace('.org ', ''), 16)
+        if uops[0].startswith(".patch"):
+            hook_address = int(uops[0].replace('.patch ', ''), 16)
+        if uops[0].startswith(".entry"):
+            hook_entry = int(uops[0].replace('.entry ', ''), 16)
+        uops = uops[1:]
+    
+    if address is None:
+        print(f'[ERROR] ucode should start with .org directive')
+        exit(1)
+
+    return address, hook_address, hook_entry, uops
+
 NOP_SEQWORD = 0x0000300000c0
 # END_SEQWORD = 0x197ec80 # GOTO uend in glm old
 END_SEQWORD = 0x130000f2 # LFENCEWAIT + UEND0
@@ -1359,12 +1380,7 @@ def assemble_ucode(ucode, avoid_unk_256, output):
     triads = [[]]
     instructions = [[]]
     labels = dict()
-    uops = ucode.split('\n')[1:]
-    org = ucode.split('\n')[0]
-    if not org.startswith('.org'):
-        print(f'[ERROR] ucode should start with .org directive')
-        exit(1)
-    address = int(org.replace('.org ', ''), 16)
+    address, hook_address, hook_entry, uops = parse_directives(ucode)
     # visit first the instructions to gather labels
     _address = address
 
@@ -1445,6 +1461,10 @@ def assemble_ucode(ucode, avoid_unk_256, output):
         print(s)
     
     tee(f'unsigned long addr = 0x{address:04x};', mode='w')
+    if not hook_address is None:
+        tee(f'unsigned long hook_address = 0x{hook_address:04x};')
+    if not hook_entry is None:
+        tee(f'unsigned long hook_entry = 0x{hook_entry:02x};')
     tee('unsigned long ucode_patch[][4] = {')
     for i, (triad, instruction) in enumerate(zip(triads, instructions)):
         seqword = NOP_SEQWORD if i < len(triads)-1 else END_SEQWORD
