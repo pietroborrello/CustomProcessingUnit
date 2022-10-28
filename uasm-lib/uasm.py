@@ -49,6 +49,9 @@ g_reg_to_id = {}
 g_reg_to_id[''] = 0
 for i, (reg, mreg) in enumerate(g_idq_src_dst_mnem):
     g_reg_to_id[reg] = 0x20 + i
+g_reg_to_id["r64dst"] = 0x01
+g_reg_to_id["r64src"] = 0x02
+g_reg_to_id["r64base"] = 0x04
 
 g_src_mnem = (
  ("", ""),              # 0x00
@@ -1218,6 +1221,17 @@ def get_odd_bits(v):
     bits = f'{v:048b}'
     return [int(i) for i in bits[1::2]]
 
+def is_decl(uop: str):
+    return uop.startswith('let [') and ']' in uop
+
+def parse_decl(uop: str):
+    if not (uop.startswith('let ') and ':=' in uop):
+        print(f'[ERROR] decl "{uop}" malformed')
+        exit(1)
+    var = uop.split('let ', 1)[1].split(':= ')[0].strip()
+    reg = uop.split('let ', 1)[1].split(':= ')[1].strip()
+    return var, reg
+
 def is_label(uop):
     return uop.startswith('<') and uop.endswith('>')
 
@@ -1232,6 +1246,9 @@ def is_three_sources(opcode):
 
 def incorrect_label(uop):
     return uop.startswith('<') and not uop.endswith('>')
+
+def incorrect_decl(uop):
+    return uop.startswith('let [') and not ']' in uop
 
 def normalize(instruction):
     instruction = re.sub(' ', '', instruction)
@@ -1250,7 +1267,9 @@ g_special_opcodes_func = {
     'LDAT_IN' : ldat_gen_base
 }
 
-def assemble_uop(uop, modifiers, labels):
+def assemble_uop(uop, modifiers, labels, var_to_reg):
+    def get_reg(var):
+        return var_to_reg.get(var, var)
     # has a destination?
     if len(uop.split(':=')) > 1:
         dest = uop.split(':=')[0].strip()
@@ -1258,6 +1277,7 @@ def assemble_uop(uop, modifiers, labels):
     else:
         dest = ''
         instr = uop.strip()
+    dest = get_reg(dest)
     dest_id = g_reg_to_id[dest]
 
     opcode = instr.split('(')[0].strip()
@@ -1273,6 +1293,7 @@ def assemble_uop(uop, modifiers, labels):
     m2 = 1 if 'm2' in modifiers else 0
     
     src0 = operands.split(',')[0].strip() if len(operands.split(',')) > 0 else ''
+    src0 = get_reg(src0)
     if src0 in labels:
         src0_id = labels[src0]
         src0_is_imm = True
@@ -1291,6 +1312,7 @@ def assemble_uop(uop, modifiers, labels):
         src0_is_imm = True
 
     src1 = operands.split(',')[1].strip() if len(operands.split(',')) > 1 else ''
+    src1 = get_reg(src1)
     if src1 in labels:
         src1_id = labels[src1]
         src1_is_imm = True
@@ -1306,6 +1328,7 @@ def assemble_uop(uop, modifiers, labels):
     src2 = ""
     if is_three_sources(opcode):
         src2 = operands.split(',')[2].strip()
+        src2 = get_reg(src2)
     src2_id = g_reg_to_id[src2]
 
     if opcode == "UJMP" and src1_id == 0 and src1 == '':
@@ -1375,11 +1398,14 @@ def parse_directives(ucode :str):
 NOP_SEQWORD = 0x0000300000c0
 # END_SEQWORD = 0x197ec80 # GOTO uend in glm old
 END_SEQWORD = 0x130000f2 # LFENCEWAIT + UEND0
+END_SEQWORD_NOWAIT = 0x200000f2 # UEND0
 END_UNKOWN_UOP = 'unk_256() !m1'
 def assemble_ucode(ucode, avoid_unk_256, output):
     triads = [[]]
     instructions = [[]]
     labels = dict()
+    var_to_reg = dict()
+    reg_to_var = dict()
     address, hook_address, hook_entry, uops = parse_directives(ucode)
     # visit first the instructions to gather labels
     _address = address
@@ -1392,6 +1418,7 @@ def assemble_ucode(ucode, avoid_unk_256, output):
     if not avoid_unk_256 and uops[-1] != END_UNKOWN_UOP:
         uops.append(END_UNKOWN_UOP)
 
+    # first pass for labels and variables
     for uop in uops:
         uop = uop.strip()
         if is_empty(uop):
@@ -1406,19 +1433,35 @@ def assemble_ucode(ucode, avoid_unk_256, output):
                 exit(1)
             labels[uop] = _address
             continue
+        
+        if incorrect_decl(uop):
+            print(f'[ERROR] declaration "{uop}" malformed, format: "let [variable] := reg"')
+            exit(1)
+        if is_decl(uop):
+            var, reg = parse_decl(uop)
+            if var in var_to_reg or reg in reg_to_var:
+                print(f'[ERROR] "{uop}" defined multiple times')
+                exit(1)
+            var_to_reg[var] = reg
+            reg_to_var[reg] = var
+            continue
 
         _address += 1
         if _address & 3 == 3:
             # skip fixed-nop uops slot
             _address += 1
 
+    if len(set(labels.keys()) & set(var_to_reg.keys())):
+        print('[ERROR] clash between labels and variables')
+        exit(1)
+
     # now assemble
     for uop_str in uops:
         uop = uop_str.split('!')[0].split('#')[0].strip()
         modifiers = uop_str.split('!')[1].split('#')[0].strip() if '!' in uop_str else ''
 
-        # skip labels
-        if is_empty(uop) or is_label(uop):
+        # skip labels and declarations
+        if is_empty(uop) or is_label(uop) or is_decl(uop):
             continue
 
         # deal with raw instructions
@@ -1427,7 +1470,7 @@ def assemble_ucode(ucode, avoid_unk_256, output):
             uop_bin = int(uop[1:], 16)
         else:
             raw_uop = False
-            uop_bin = assemble_uop(uop, modifiers, labels)
+            uop_bin = assemble_uop(uop, modifiers, labels, var_to_reg)
 
         # add both CRCs
         f_parity = lambda a,b: a^b
@@ -1439,6 +1482,8 @@ def assemble_ucode(ucode, avoid_unk_256, output):
         uop_nolabels = uop + ((' !' + modifiers) if modifiers else '')
         for label in labels:
             uop_nolabels = uop_nolabels.replace(label, f'U{labels[label]:04x}')
+        for var, reg in var_to_reg.items():
+            uop_nolabels = uop_nolabels.replace(var, reg)
         if not raw_uop and normalize(uop_disassemble(uop_bin, 0)) != normalize(uop_nolabels):
             print('[ERROR] something went wrong while compiling:')
             print(f'    input:  {uop_nolabels}')
