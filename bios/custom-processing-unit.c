@@ -835,6 +835,11 @@ BOOLEAN blacklisted_instruction(UINTN address) {
     // int1
     if (address == 0x3e94) return TRUE; // MOVETOCREG_DSZ64(tmp0, 0x070)
 
+    // div
+    // if (address == 0x6c8) return TRUE;
+    if (address == 0x6ca) return TRUE;
+    if (address == 0x6cc) return TRUE;
+
 
     // The next addresses in the black list where crashing if the match&patch was not
     // reinitialized at every iteration. Keep them for future reference
@@ -1081,6 +1086,119 @@ static void test3(void) {
     Print(L"[done]: %lx\n", resA);
 }
 
+#undef ITS
+#define ITS 0x10000
+static void div(unsigned long a, unsigned long d, unsigned long b) {
+    uint64_t res = 0;
+    uint64_t rem = 0;
+    uint64_t start = rdtscp();
+    for(int i = 0; i < ITS; i++) {
+        asm volatile(
+            "div %%rcx\n"
+            "lfence\n"
+            : "=a"(res), "=d"(rem)
+            : "a"(a), "d"(d), "c"(b)
+        );
+    }
+    uint64_t end = rdtscp();
+    Print(L"div(0x%lx, 0x%0lx, 0x%lx) = %lx\n", a, d, b, res);
+    Print(L"elapsed: %ld\n", (end-start)/ITS);
+}
+
+static void ctdiv(unsigned long a, unsigned long d, unsigned long b) {
+    uint64_t res = 0;
+    uint64_t rem = 0;
+    uint64_t start = rdtscp();
+    for(int i = 0; i < ITS; i++) {
+        asm volatile(
+            ".byte 0xf1\n"
+            "lfence\n"
+            : "=a"(res), "=d"(rem)
+            : "a"(a), "d"(d), "c"(b)
+        );
+    }
+    uint64_t end = rdtscp();
+    uint64_t expected = 0;
+    asm volatile(
+        "div %%rcx\n"
+        : "=a"(expected), "=d"(rem)
+        : "a"(a), "d"(d), "c"(b)
+    );
+    Print(L"ctdiv(0x%lx, 0x%0lx, 0x%lx) = %lx (%lx)\n", a, d, b, res, expected);
+    Print(L"elapsed: %ld\n", (end-start)/ITS);
+}
+
+#define cmov(cond, res, other) asm volatile ("test %2, %2\ncmove %1, %0\n":"+r"(res):"r"(other), "r"(cond): "cc")
+static void swdiv(unsigned long a, unsigned long d, unsigned long b) {
+    uint64_t res = 0;
+    uint64_t rem = 0;
+    uint64_t start = rdtscp();
+    for(int i = 0; i < ITS; i++) {
+        unsigned long long quotient = 0, temp = 0;
+        const unsigned long long size = 8;
+        unsigned long long dividend = a;
+        unsigned long long divisor = b;
+        // test down from the highest bit and
+        // accumulate the tentative value for
+        // valid bit
+        for (int i = size*8-1; i >= 0; --i) {
+            temp = (temp << 1uLL) | ((dividend >> i) & 1);
+            char cmp = (temp >= divisor);
+            unsigned long long temp1 = divisor;
+            unsigned long long zero = 0;
+            cmov(cmp, temp1, zero);
+            temp -= temp1;
+            unsigned long long temp2 = 1uLL << i;
+            cmov(cmp, temp2, zero);
+            quotient |= temp2;
+        }
+        res = quotient;
+        lfence();
+    }
+    uint64_t end = rdtscp();
+    uint64_t expected = 0;
+    asm volatile(
+        "div %%rcx\n"
+        : "=a"(expected), "=d"(rem)
+        : "a"(a), "d"(d), "c"(b)
+    );
+    Print(L"swdiv(0x%lx, 0x%0lx, 0x%lx) = %lx (%lx)\n", a, d, b, res, expected);
+    Print(L"elapsed: %ld\n", (end-start)/ITS);
+}
+
+static void test4(void) {
+#define PKE_BIT 22
+    Print(L"[test4]: %lx\n", test4);
+
+    // ctdiv(0, 0, 1);
+    // ctdiv(2, 0, 2);
+    // ctdiv(0x11223344556677uL, 0, 0x1);
+    // ctdiv(0x1, 0, 0x11223344556677uL);
+    // ctdiv(2, 0x1uL, 2);
+    // ctdiv(0x11223344556677uL, 0x1uL, 0x10);
+    // ctdiv(0x1, 0x1122334uL, 0x11223344556677uL);
+    // ctdiv(0x11223344556677uL, 0x112233uL, 0x13377900);
+
+    init_match_and_patch();
+    #include "ucode_patches/ctdiv.h"
+    Print(L"patching addr: %08lx - ram: %08lx\n", addr, ucode_addr_to_patch_addr(addr));
+    patch_ucode(addr, ucode_patch, sizeof(ucode_patch) / sizeof(ucode_patch[0]));
+    Print(L"hooking entry: %02lx, addr: %04lx, hook_addr: %04lx\n", hook_entry, addr, hook_address);
+    hook_match_and_patch(hook_entry, hook_address, addr);
+
+    swdiv(0, 0, 1);
+    swdiv(0x11223344556677uL, 0, 0x13377);
+
+
+    ctdiv(0, 0, 1);
+    ctdiv(0x11223344556677uL, 0, 0x13377);
+
+    div(0, 0, 1);
+    div(0x11223344556677uL, 0, 0x13377);
+
+    Print(L"[done]\n");
+}
+
 EFI_STATUS
 EFIAPI
 efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
@@ -1121,7 +1239,8 @@ efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
         // usage();
         // test1();
         // test2();
-        test3();
+        // test3();
+        test4();
         return EFI_SUCCESS;
     } else if (argc > 1) {
         if (argv[1][0] == L'c') {

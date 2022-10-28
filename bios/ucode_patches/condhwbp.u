@@ -4,7 +4,7 @@
 
 # we can reuse tmp10 since it will be overwritten anyways
 tmp10:= SUB_DSZ64(0x1337, rdi) # trigger only if rdi==0x1337 
-UJMPCC_DIRECT_NOTTAKEN_CONDNZ(tmp10, <uend>)
+UJMPCC_DIRECT_NOTTAKEN_CONDNZ(tmp10, <end>)
 
 <continue>
 tmp10:= SHL_DSZ32(0x00000000, tmp8)
@@ -12,5 +12,6 @@ tmp10:= SELECTCC_DSZ32_CONDNZ(tmp5, tmp10)
 tmp10:= SELECTCC_DSZ32_CONDNB(tmp12, tmp10)
 UJMP(, 0x1ee8) # continue
 
-<uend>
+<end>
 UJMP(, 0x270d) # goto uend
+NOP

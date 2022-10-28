@@ -311,7 +311,8 @@ void irq_handler_c(idt_ctx_t *ctx) {
     // the system if put in except_irq, not sure why
     if (exception_jmp_buf.__rip == 0) {
         Print(L"[-] IRQ ABORTED:\n");
-        Print(L"  rip: 0x%lx -> 0x%016lx\n", ctx->rip, *(unsigned long*)ctx->rip);
+        Print(L"  rip: 0x%lx -> ", ctx->rip);
+        Print(L"0x%016lx\n", *(unsigned long*)ctx->rip);
         Print(L"  cs: 0x%lx\n", ctx->cs);
         Print(L"  rflags: 0x%lx\n", ctx->rflags);
     }
