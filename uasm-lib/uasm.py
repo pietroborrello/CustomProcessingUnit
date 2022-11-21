@@ -1346,7 +1346,7 @@ def assemble_uop(uop, modifiers, labels, var_to_reg):
     # assign src0
     if src0_is_imm:
         if src0_id > 0xffff:
-            print('[ERROR] immediates must be 16 bits')
+            print(f'[ERROR] immediates must be 16 bits: {uop}')
             exit(1)
         
         # reversed from get_str_uop_common_imm
@@ -1358,7 +1358,7 @@ def assemble_uop(uop, modifiers, labels, var_to_reg):
     # assign src1
     if src1_is_imm:
         if src1_id > 0xffff:
-            print('[ERROR] immediates must be 16 bits')
+            print(f'[ERROR] immediates must be 16 bits: {uop}')
             exit(1)
         
         # reversed from get_str_uop_common_imm
@@ -1395,6 +1395,60 @@ def parse_directives(ucode :str):
 
     return address, hook_address, hook_entry, uops
 
+def expand_zeroext(uop):
+    if len(uop.split(':=')) > 1:
+        dest = uop.split(':=')[0].strip()
+        instr = uop.split(':=')[1].strip()
+    else:
+        dest = ''
+        instr = uop.strip()
+
+    if "SEQW" in instr:
+        seqw = instr.split("SEQW")[1].strip()
+        instr = instr.split("SEQW")[0].strip()
+    else:
+        seqw = ''
+
+    opcode = instr.split('(')[0].strip()
+    operands = instr.split('(')[1].split(')')[0].strip() if '(' in instr else ''
+
+    if "," in operands:
+        print(f'[ERROR] expected single operand in ZEROEXT_MACRO: {uop}')
+        exit(1)
+
+    value = int(operands, 16)
+
+    # generate the uops
+    expanded_uops = []
+    expanded_uops.append(f"{dest}:= ZEROEXT_DSZ64(0x{((value >> 48) & 0xffff):x})")
+    expanded_uops.append(f"{dest}:= SHL_DSZ64({dest}, 0x10)")
+    expanded_uops.append(f"{dest}:= OR_DSZ64({dest}, 0x{((value >> 32) & 0xffff):x})")
+    expanded_uops.append(f"{dest}:= SHL_DSZ64({dest}, 0x10)")
+    expanded_uops.append(f"{dest}:= OR_DSZ64({dest}, 0x{((value >> 16) & 0xffff):x})")
+    expanded_uops.append(f"{dest}:= SHL_DSZ64({dest}, 0x10)")
+    expanded_uops.append(f"{dest}:= OR_DSZ64({dest}, 0x{((value >> 0) & 0xffff):x}) {seqw}")
+
+    return expanded_uops
+
+macros = {
+    "ZEROEXT_MACRO" : expand_zeroext
+}
+def expand_macros(uops: list):
+    expanded_uops = []
+    for uop in uops:
+        if len(uop.split(':=')) > 1:
+            instr = uop.split(':=')[1].strip()
+        else:
+            instr = uop.strip()
+
+        opcode = instr.split('(')[0].strip()
+
+        if opcode in macros:
+            expanded_uops += macros[opcode](uop)
+        else:
+            expanded_uops.append(uop)
+    return expanded_uops
+
 NOP_SEQWORD = 0x0000300000c0
 # END_SEQWORD = 0x197ec80 # GOTO uend in glm old
 END_SEQWORD = 0x130000f2 # LFENCEWAIT + UEND0
@@ -1418,7 +1472,10 @@ def assemble_ucode(ucode, avoid_unk_256, output):
     if not avoid_unk_256 and uops[-1] != END_UNKOWN_UOP:
         uops.append(END_UNKOWN_UOP)
 
-    # first pass for labels and variables
+    #first expand macros
+    uops = expand_macros(uops)
+
+    # second pass for labels and variables
     for uop in uops:
         uop = uop.strip()
         if is_empty(uop):
