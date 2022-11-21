@@ -91,7 +91,7 @@ g_src_mnem += g_idq_src_dst_mnem
 g_dst_mnem = (
  ("", ""),              # 0x00
  ("r64dst", "xmm2"),    # 0x01
- ("rax", "xmm0"),       # 0x02
+ ("r64src", "xmm0"),    # 0x02
  ("rdi", "xmm7"),       # 0x03
  ("rax", "xmm0"),       # 0x04
  ("rax", "xmm0"),       # 0x05
