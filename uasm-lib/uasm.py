@@ -1221,6 +1221,12 @@ def get_odd_bits(v):
     bits = f'{v:048b}'
     return [int(i) for i in bits[1::2]]
 
+def crc(s):
+    f_parity = lambda a,b: a^b
+    crc1 = reduce(f_parity, get_even_bits(s))
+    crc2 = reduce(f_parity, get_odd_bits(s))
+    return crc1, crc2
+
 def is_decl(uop: str):
     return uop.startswith('let [') and ']' in uop
 
@@ -1404,12 +1410,11 @@ def expand_zeroext(uop):
         instr = uop.strip()
 
     if "SEQW" in instr:
-        seqw = instr.split("SEQW")[1].strip()
+        seqw = "SEQW " + instr.split("SEQW")[1].strip()
         instr = instr.split("SEQW")[0].strip()
     else:
         seqw = ''
 
-    opcode = instr.split('(')[0].strip()
     operands = instr.split('(')[1].split(')')[0].strip() if '(' in instr else ''
 
     if "," in operands:
@@ -1429,6 +1434,9 @@ def expand_zeroext(uop):
     expanded_uops.append(f"{dest}:= OR_DSZ64({dest}, 0x{((value >> 0) & 0xffff):x}) {seqw}")
 
     return expanded_uops
+
+def seqw_to_str(seqw):
+    return (" SEQW " + seqw) if seqw else ""
 
 macros = {
     "ZEROEXT_MACRO" : expand_zeroext
@@ -1454,8 +1462,105 @@ NOP_SEQWORD = 0x0000300000c0
 END_SEQWORD = 0x130000f2 # LFENCEWAIT + UEND0
 END_SEQWORD_NOWAIT = 0x200000f2 # UEND0
 END_UNKOWN_UOP = 'unk_256() !m1'
+
+def assemble_seqword(partial_seqwords, labels, is_last):
+    # common case
+    if all(seqw == '' for seqw in partial_seqwords):
+        if is_last:
+            while len(partial_seqwords) < 3:
+                partial_seqwords.append("")
+            partial_seqwords[-1] = "LFNCEWAIT, UEND0"
+            return END_SEQWORD
+        return NOP_SEQWORD
+
+    # if did not explicitly put a seqw at the last uop, always pad and uend
+    if is_last and partial_seqwords[-1] == '':
+        while len(partial_seqwords) < 3:
+            partial_seqwords.append("")
+        partial_seqwords[-1] = "LFNCEWAIT, UEND0"
+
+    uop_ctrl = 0
+    uop_ctrl_uidx = 0
+    tetrad_ctrl_next_uaddr = 0
+    tetrad_ctrl_uidx = 0x03
+    sync_ctrl = 0
+    sync_ctrl_uidx = 0x03
+
+    # uop_ctrl
+    uret_uop_ctrls = {"URET0": 2, "URET1": 3}
+    uend_uop_ctrls = {"UEND0": 0xc, "UEND1": 0xd, "UEND2": 0xe, "UEND3": 0xf}
+    save_uip_uop_ctrls = {"SAVEUIP0": 4, "SAVEUIP1": 5}
+    misc_exec_ctrl_uop_ctrls = {"WRTAGW": 8, "MSLOOP": 9, "MSSTOP": 0xb}
+    uop_ctrls = {**uret_uop_ctrls, **uend_uop_ctrls, **save_uip_uop_ctrls, **misc_exec_ctrl_uop_ctrls}
+
+    # sync_ctrl
+    lfence_sync_ctrls = {"LFNCEWAIT": 1, "LFNCEMARK": 2, "LFNCEWTMRK": 3}
+    oooe_sync_ctrls = {"SYNCFULL": 4, "SYNCWAIT": 5, "SYNCMARK": 6, "SYNCWTMRK": 7}
+    sync_ctrls = {**lfence_sync_ctrls, **oooe_sync_ctrls}
+
+    for uidx, _seqw in enumerate(partial_seqwords):
+        for seqw in _seqw.split(", "):
+            if "GOTO" in seqw:
+                if tetrad_ctrl_uidx != 0x03:
+                    print(f'[ERROR] invalid seqws - cannot specify tetrad_ctrl twice: {", ".join(partial_seqwords)}')
+                    exit(1)
+                next_uaddr = seqw.replace("GOTO ", "").strip()
+                next_uaddr = labels[next_uaddr] if next_uaddr in labels else int(next_uaddr, 16)
+                tetrad_ctrl_uidx = uidx
+                tetrad_ctrl_next_uaddr = next_uaddr
+            
+            elif seqw in uop_ctrls:
+                if uop_ctrl:
+                    print(f'[ERROR] invalid seqws - cannot specify flow_ctrl twice: {", ".join(partial_seqwords)}')
+                    exit(1)
+
+                uop_ctrl_uidx = uidx
+                uop_ctrl = uop_ctrls[seqw]
+
+            elif seqw in sync_ctrls:
+                if sync_ctrl:
+                    print(f'[ERROR] invalid seqws - cannot specify sync_ctrl twice: {", ".join(partial_seqwords)}')
+                    exit(1)
+                
+                sync_ctrl_uidx = uidx
+                sync_ctrl = sync_ctrls[seqw]
+
+            elif seqw == '':
+                pass
+
+            else:
+                print(f'[ERROR] unknown seqws: "{seqw}" in {", ".join(partial_seqwords)}')
+                exit(1)
+
+    seqw_bin = (sync_ctrl << 25) | (sync_ctrl_uidx << 23) | (tetrad_ctrl_next_uaddr << 8) | (tetrad_ctrl_uidx << 6) | (uop_ctrl << 2) | (uop_ctrl_uidx)
+
+    # add both CRCs
+    f_parity = lambda a,b: a^b
+    crc1 = reduce(f_parity, get_even_bits(seqw_bin))
+    crc2 = reduce(f_parity, get_odd_bits(seqw_bin))
+    seqw_bin |= (crc1 << 29)
+    seqw_bin |= (crc2 << 28)
+    assert crc(seqw_bin) == (0,0)
+
+
+    # verify seqw
+    for i, seqw in enumerate(partial_seqwords):
+        disasm_seqw_before = process_seqword(i, 0, seqw_bin, True).replace("->", "").strip()
+        disasm_seqw_after  = process_seqword(i, 0, seqw_bin, False).replace("SEQW ", "").strip()
+        disasm_seqw = ", ".join(s for s in [disasm_seqw_before, disasm_seqw_after] if s)
+        if normalize(seqw) != normalize(disasm_seqw):
+            print('[ERROR] something went wrong while compiling seqwords:')
+            print(f'    seqws:  {", ".join(partial_seqwords)}')
+            print(f'    input:  {seqw}')
+            print(f'    output: {hex(seqw_bin)}')
+            print(f'    disass: {disasm_seqw}')
+            exit(1)
+
+    return seqw_bin
+
 def assemble_ucode(ucode, avoid_unk_256, output):
     triads = [[]]
+    seqws = [[]]
     instructions = [[]]
     labels = dict()
     var_to_reg = dict()
@@ -1514,8 +1619,13 @@ def assemble_ucode(ucode, avoid_unk_256, output):
 
     # now assemble
     for uop_str in uops:
-        uop = uop_str.split('!')[0].split('#')[0].strip()
-        modifiers = uop_str.split('!')[1].split('#')[0].strip() if '!' in uop_str else ''
+        uop = uop_str.split('!')[0].split("SEQW")[0].split('#')[0].strip()
+        modifiers = uop_str.split('!')[1].split("SEQW")[0].split('#')[0].strip() if '!' in uop_str else ''
+
+        seqw = uop_str.split("SEQW")[1].split('#')[0].strip() if 'SEQW' in uop_str else ''
+        # replace labels in seqw
+        for label, l_uaddr in labels.items():
+            seqw = seqw.replace(label, f"0x{l_uaddr:04x}")
 
         # skip labels and declarations
         if is_empty(uop) or is_label(uop) or is_decl(uop):
@@ -1535,6 +1645,7 @@ def assemble_ucode(ucode, avoid_unk_256, output):
         crc2 = reduce(f_parity, get_odd_bits(uop_bin))
         uop_bin |= (crc1 << 47)
         uop_bin |= (crc2 << 46)
+        assert crc(uop_bin) == (0,0)
 
         uop_nolabels = uop + ((' !' + modifiers) if modifiers else '')
         for label in labels:
@@ -1551,9 +1662,11 @@ def assemble_ucode(ucode, avoid_unk_256, output):
 
         if len(triads[-1]) == 3:
             triads.append([])
+            seqws.append([])
             instructions.append([])
         
         triads[-1].append(uop_bin)
+        seqws[-1].append(seqw)
         instructions[-1].append(uop_nolabels)
 
     def tee(s, mode='a'):
@@ -1568,18 +1681,23 @@ def assemble_ucode(ucode, avoid_unk_256, output):
     if not hook_entry is None:
         tee(f'unsigned long hook_entry = 0x{hook_entry:02x};')
     tee('unsigned long ucode_patch[][4] = {')
-    for i, (triad, instruction) in enumerate(zip(triads, instructions)):
-        seqword = NOP_SEQWORD if i < len(triads)-1 else END_SEQWORD
+    for i, (triad, partial_seqwords, instruction) in enumerate(zip(triads, seqws, instructions)):
+        is_last = i == len(triads)-1
+        # combine the sequence words into one (checking for validity)
+        seqword = assemble_seqword(partial_seqwords, labels, is_last)
+        # just for prints
+        seqw0 = partial_seqwords[0] if len(partial_seqwords)>0 else ''
+        seqw1 = partial_seqwords[1] if len(partial_seqwords)>1 else ''
+        seqw2 = partial_seqwords[2] if len(partial_seqwords)>2 else ''
         uop0 = triad[0] if len(triad)>0 else 0
         uop1 = triad[1] if len(triad)>1 else 0
         uop2 = triad[2] if len(triad)>2 else 0
 
-        iseqword = 'SEQ_NOP' if i < len(triads)-1 else 'SEQ_END'
         addr = address + i*4
         instr0 = instruction[0] if len(instruction)>0 else 'NOP'
         instr1 = instruction[1] if len(instruction)>1 else 'NOP'
         instr2 = instruction[2] if len(instruction)>2 else 'NOP'
-        tee(f'    // U{addr:04x}: {instr0}, {instr1}, {instr2}, {iseqword}')
+        tee(f'    // U{addr:04x}: {instr0}{seqw_to_str(seqw0)}; {instr1}{seqw_to_str(seqw1)}; {instr2}{seqw_to_str(seqw2)}')
         tee(f'    {{{hex(uop0)}, {hex(uop1)}, {hex(uop2)}, {hex(seqword)}}},')
     tee('};')
 
