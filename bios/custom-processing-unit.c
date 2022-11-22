@@ -1009,8 +1009,8 @@ int access_time_flush(void* ptr) {
 }
 
 uint8_t ids[0x10000] = {0};
-static void test1(void) {
-    Print(L"[test1]: %lx\n", test1);
+static void test_int1(void) {
+    Print(L"[int1]\n");
     #define ITS 0x100ff
     UINTN resA=0; UINTN resB=0; UINTN resC=0; UINTN resD=0;
     init_match_and_patch();
@@ -1039,8 +1039,8 @@ static void test1(void) {
     Print(L"[done]: %ld, %ld\n", end-start, (end-start)/ITS);
 }
 
-static void test2(void) {
-    Print(L"[test2]: %lx\n", test2);
+static void test_int3(void) {
+    Print(L"[int3]\n");
     #define ITS 0x100ff
     uint64_t start = rdtscp();
     int i;
@@ -1059,8 +1059,8 @@ static void test2(void) {
     Print(L"[done]: %ld, %ld\n", end-start, (end-start)/ITS);
 }
 
-static void test3(void) {
-    Print(L"[test3]: %lx\n", test3);
+static void test_HBREAKCC(void) {
+    Print(L"[HBREAKCC]\n");
     Print(L"func: %lx\n", func);
     UINTN resA = 0;
     init_match_and_patch();
@@ -1166,9 +1166,9 @@ static void swdiv(unsigned long a, unsigned long d, unsigned long b) {
     Print(L"elapsed: %ld\n", (end-start)/ITS);
 }
 
-static void test4(void) {
+static void test_CTDIV(void) {
 #define PKE_BIT 22
-    Print(L"[test4]: %lx\n", test4);
+    Print(L"[CTDIV]\n");
 
     // ctdiv(0, 0, 1);
     // ctdiv(2, 0, 2);
@@ -1197,6 +1197,60 @@ static void test4(void) {
     div(0x11223344556677uL, 0, 0x13377);
 
     Print(L"[done]\n");
+}
+
+static void test_PAC(void) {
+    Print(L"[PAC]\n");
+    init_match_and_patch();
+    {
+        #include "ucode_patches/pac_sign.h"
+        Print(L"patching addr: %08lx - ram: %08lx\n", addr, ucode_addr_to_patch_addr(addr));
+        patch_ucode(addr, ucode_patch, sizeof(ucode_patch) / sizeof(ucode_patch[0]));
+        Print(L"hooking entry: %02lx, addr: %04lx, hook_addr: %04lx\n", hook_entry, addr, hook_address);
+        hook_match_and_patch(hook_entry, hook_address, addr);
+    }
+    {
+        #include "ucode_patches/pac_verify.h"
+        Print(L"patching addr: %08lx - ram: %08lx\n", addr, ucode_addr_to_patch_addr(addr));
+        patch_ucode(addr, ucode_patch, sizeof(ucode_patch) / sizeof(ucode_patch[0]));
+        Print(L"hooking entry: %02lx, addr: %04lx, hook_addr: %04lx\n", hook_entry, addr, hook_address);
+        hook_match_and_patch(hook_entry, hook_address, addr);
+    }
+
+    UINTN ptr = 0xcafebabe;
+    UINTN ctx = 0xdeadbeef;
+    UINTN pac_ptr = 0;
+
+    {
+        uint64_t start = rdtscp();
+        for(int i = 0; i < ITS; i++) {
+            //  hook int1 for PAC computation
+            asm volatile(
+                ".byte 0xf1\n"
+                : "=a"(pac_ptr)
+                : "a"(ptr), "c"(ctx)
+            );
+        }
+        uint64_t end = rdtscp();
+        Print(L"pac(0x%lx, 0x%0lx) = %lx\n", ptr, ctx, pac_ptr);
+        Print(L"elapsed: %ld\n", (end-start)/ITS);
+    }
+    {
+        uint64_t start = rdtscp();
+        for(int i = 0; i < ITS; i++) {
+            //  hook int1 for PAC computation
+            asm volatile(
+                ".byte 0xcc\n"
+                : "=a"(ptr)
+                : "a"(pac_ptr), "c"(ctx)
+            );
+        }
+        uint64_t end = rdtscp();
+        Print(L"auth(0x%lx, 0x%0lx) = %lx\n", pac_ptr, ctx, ptr);
+        Print(L"elapsed: %ld\n", (end-start)/ITS);
+    }
+
+    init_match_and_patch();
 }
 
 EFI_STATUS
@@ -1237,10 +1291,7 @@ efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
 
     if (argc < 2) {
         // usage();
-        // test1();
-        // test2();
-        // test3();
-        test4();
+        test_PAC();
         return EFI_SUCCESS;
     } else if (argc > 1) {
         if (argv[1][0] == L'c') {
