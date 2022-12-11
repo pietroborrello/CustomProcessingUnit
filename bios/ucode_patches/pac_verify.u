@@ -2,6 +2,8 @@
 .patch 0xa78
 .entry 2
 
+# pac_auth(signed_ptr: rax, ctx: rcx) -> ptr: rax
+# Verify the PAC signature matches given a signed pointer and a context
 # declare variables
 let [key] := tmp0
 let [ptr] := rax

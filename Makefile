@@ -16,6 +16,8 @@ build-ucode:
 	uasm-lib/uasm.py -i bios/ucode_patches/fastbp.u --avoid_unk_256 -o ./bios/ucode_patches/fastbp.h
 	uasm-lib/uasm.py -i bios/ucode_patches/condhwbp.u --avoid_unk_256 -o ./bios/ucode_patches/condhwbp.h
 	uasm-lib/uasm.py -i bios/ucode_patches/ctdiv.u -o ./bios/ucode_patches/ctdiv.h
+	uasm-lib/uasm.py -i bios/ucode_patches/pac_sign.u --avoid_unk_256 -o ./bios/ucode_patches/pac_sign.h
+	uasm-lib/uasm.py -i bios/ucode_patches/pac_verify.u --avoid_unk_256 -o ./bios/ucode_patches/pac_verify.h
 
 build-cpu:
 	xxd -i bios/glm-intel-ucode/06-5c-09 > bios/glm-intel-ucode/06-5c-09.h

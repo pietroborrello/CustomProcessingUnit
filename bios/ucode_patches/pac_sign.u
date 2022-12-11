@@ -2,6 +2,8 @@
 .patch 0xc40
 .entry 1
 
+# pac_sign(ptr: rax, ctx: rcx) -> signed_ptr: rax
+# Compute the PAC signature using a single round SipHash algorithm and embed it in the high 16 bits of a ptr
 # declare variables
 let [key] := tmp0
 let [ptr] := rax
