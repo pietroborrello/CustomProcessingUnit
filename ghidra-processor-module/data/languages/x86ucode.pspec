@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/processor_spec.rxg -->
+
+<processor_spec>
+        <programcounter register="PC"/> 
+        <default_memory_blocks>
+                <memory_block name="uram"    start_address="uram:0x0000"    length="0x1000"      mode="rw" initialized="false"/>
+                <memory_block name="crbus"   start_address="crbus:0x0000"   length="0x10000"     mode="rw" initialized="false"/>
+                <memory_block name="alias"   start_address="alias:0x0000"   length="0x800"       mode="rw" initialized="false"/>
+                <memory_block name="segdesc" start_address="segdesc:0x0000" length="0x600"       mode="rw" initialized="false"/>
+                <memory_block name="mem"     start_address="mem:0x0000"     length="0x100000000" mode="rw" initialized="false"/>
+        </default_memory_blocks>
+
+        <volatile outputop="write" inputop="read">
+                <range space="crbus"    first="0x0"    last="0xffff"/>
+                <range space="register" first="0x0"    last="0x7f"/>
+                <range space="register" first="0x1b0"  last="0x1cf"/>
+        </volatile>
+
+        <default_symbols>
+        <!-- UCODE LABELS -->
+        <!-- NOTICE: each address is multiplied by $(INSTR_LEN) wrt the original label.txt -->
+        <symbol name="sha256_ret"               address="ucode:0x00110" type="code" entry="true"/>
+        <symbol name="sidt_xlat"                address="ucode:0x02d80" type="code" entry="true"/>
+        <symbol name="vmresume_xlat"            address="ucode:0x03200" type="code" entry="true"/>
+        <symbol name="vmlaunch_xlat"            address="ucode:0x03280" type="code" entry="true"/>
+        <symbol name="vmwrite_r64_mem_xlat"     address="ucode:0x03300" type="code" entry="true"/>
+        <symbol name="rdrand_xlat"              address="ucode:0x04280" type="code" entry="true"/>
+        <symbol name="rdseed_xlat"              address="ucode:0x04300" type="code" entry="true"/>
+        <symbol name="set_carry_uend"           address="ucode:0x04ae0" type="code" entry="true"/>
+        <symbol name="udbgwr_xlat"              address="ucode:0x06600" type="code" entry="true"/>
+        <symbol name="jump_tmp3"                address="ucode:0x06be0" type="code" entry="true"/>
+        <symbol name="uret1"                    address="ucode:0x06c60" type="code" entry="true"/>
+        <symbol name="sldt_m16_xlat"            address="ucode:0x07200" type="code" entry="true"/>
+        <symbol name="sysexit_xlat"             address="ucode:0x07380" type="code" entry="true"/>
+        <symbol name="rdtscp_xlat"              address="ucode:0x07880" type="code" entry="true"/>
+        <symbol name="clear_aflags_uend0"       address="ucode:0x07940" type="code" entry="true"/>
+        <symbol name="send_op_pcu_mailbox"      address="ucode:0x07b50" type="code" entry="true"/>
+        <symbol name="hlt_xlat"                 address="ucode:0x08180" type="code" entry="true"/>
+        <symbol name="mov_cr0_r64_xlat"         address="ucode:0x08900" type="code" entry="true"/>
+        <symbol name="rsm_xlat"                 address="ucode:0x08c00" type="code" entry="true"/>
+        <symbol name="vmxoff_xlat"              address="ucode:0x08c80" type="code" entry="true"/>
+        <symbol name="encls_xlat"               address="ucode:0x08d00" type="code" entry="true"/>
+        <symbol name="sldt_r16_xlat"            address="ucode:0x0a680" type="code" entry="true"/>
+        <symbol name="rdmsr_xlat"               address="ucode:0x0ae00" type="code" entry="true"/>
+        <symbol name="vmxon_xlat"               address="ucode:0x0ae80" type="code" entry="true"/>
+        <symbol name="vmptrld_xlat"             address="ucode:0x0af00" type="code" entry="true"/>
+        <symbol name="vmclear_xlat"             address="ucode:0x0af80" type="code" entry="true"/>
+        <symbol name="vmcall_xlat"              address="ucode:0x0b080" type="code" entry="true"/>
+        <symbol name="enclu_xlat"               address="ucode:0x0b100" type="code" entry="true"/>
+        <symbol name="udbgrd_xlat"              address="ucode:0x0b580" type="code" entry="true"/>
+        <symbol name="lidt_xlat"                address="ucode:0x0b900" type="code" entry="true"/>
+        <symbol name="str_m16_xlat"             address="ucode:0x0ba00" type="code" entry="true"/>
+        <symbol name="write_port_4c"            address="ucode:0x0bc90" type="code" entry="true"/>
+        <symbol name="wmptrst_xlat"             address="ucode:0x0bd00" type="code" entry="true"/>
+        <symbol name="cpuid_xlat"               address="ucode:0x0be00" type="code" entry="true"/>
+        <symbol name="sgdt_xlat"                address="ucode:0x0c100" type="code" entry="true"/>
+        <symbol name="mov_r64_cr8_xlat"         address="ucode:0x0c700" type="code" entry="true"/>
+        <symbol name="wrmsr_xlat"               address="ucode:0x0c800" type="code" entry="true"/>
+        <symbol name="rdtsc_xlat"               address="ucode:0x0ca80" type="code" entry="true"/>
+        <symbol name="rdpmc_xlat"               address="ucode:0x0cc00" type="code" entry="true"/>
+        <symbol name="vmwrite_r64_r64_xlat"     address="ucode:0x0cd80" type="code" entry="true"/>
+        <symbol name="uend"                     address="ucode:0x17ec0" type="code" entry="true"/>
+        <symbol name="rdrand_impl"              address="ucode:0x18610" type="code" entry="true"/>
+        <symbol name="uret1"                    address="ucode:0x1cbe0" type="code" entry="true"/>
+        <symbol name="check_rdrand_vmexits"     address="ucode:0x1d8d0" type="code" entry="true"/>
+        <symbol name="patch_runs_load_loop"     address="ucode:0x1ea60" type="code" entry="true"/>
+        <symbol name="do_smm_vmexit"            address="ucode:0x1f900" type="code" entry="true"/>
+        <symbol name="do_smm_vmexit_ovr_enter_rip" address="ucode:0x1f910" type="code" entry="true"/>
+        <symbol name="generate_#GP"             address="ucode:0x27110" type="code" entry="true"/>
+        <symbol name="generate_#UD"             address="ucode:0x27690" type="code" entry="true"/>
+        <symbol name="generate_#NM"             address="ucode:0x27710" type="code" entry="true"/>
+        <symbol name="patch_load_error"         address="ucode:0x27b40" type="code" entry="true"/>
+        <symbol name="uarch_bufs_ldat_init"     address="ucode:0x27c10" type="code" entry="true"/>
+        <symbol name="patch_apply_error"        address="ucode:0x27f10" type="code" entry="true"/>
+        <symbol name="check_rsa_padding_signature" address="ucode:0x2d720" type="code" entry="true"/>
+        <symbol name="lbsync_full"              address="ucode:0x2b150" type="code" entry="true"/>
+        <symbol name="uret0"                    address="ucode:0x304e0" type="code" entry="true"/>
+        <symbol name="uend0"                    address="ucode:0x32100" type="code" entry="true"/>
+        <symbol name="apply_ucode_patch"        address="ucode:0x327c0" type="code" entry="true"/>
+        <symbol name="exit_probe_mode"          address="ucode:0x35a50" type="code" entry="true"/>
+        <symbol name="enter_probe_mode"         address="ucode:0x3a410" type="code" entry="true"/>
+        <symbol name="check_cpl_uend3"          address="ucode:0x3dfa0" type="code" entry="true"/>
+        <symbol name="probe_mode_force_sgx_eenter_eresume" address="ucode:0x44f90" type="code" entry="true"/>
+        <symbol name="reset_flow"               address="ucode:0x40000" type="code" entry="true"/>
+        <symbol name="check_rsa_pub_key_hash"   address="ucode:0x46440" type="code" entry="true"/>
+        <symbol name="gen_rc4_key"              address="ucode:0x465c0" type="code" entry="true"/>
+        <symbol name="do_vmexit"                address="ucode:0x4e810" type="code" entry="true"/>
+        <symbol name="do_vmexit_ovr_enter_rip"  address="ucode:0x4e820" type="code" entry="true"/>
+        <symbol name="calc_sha256_start"        address="ucode:0x50c40" type="code" entry="true"/>
+        <symbol name="calc_sha256_update"       address="ucode:0x50da0" type="code" entry="true"/>
+        <symbol name="calc_fast_sha256_start"   address="ucode:0x556a0" type="code" entry="true"/>
+        <symbol name="rsa_signing_error"        address="ucode:0x57950" type="code" entry="true"/>
+        <symbol name="probe_mode_force_smm_xlat" address="ucode:0x5c010" type="code" entry="true"/>
+        <symbol name="send_op_data_pcu_mailbox" address="ucode:0x5c620" type="code" entry="true"/>
+        <symbol name="fit_process_error"        address="ucode:0x5e680" type="code" entry="true"/>
+        <symbol name="rc4_decrypt"              address="ucode:0x5ed50" type="code" entry="true"/>
+        <symbol name="fit_load_end"             address="ucode:0x608a0" type="code" entry="true"/>
+        <symbol name="ucode_fit_xlat_found"     address="ucode:0x64ea0" type="code" entry="true"/>
+        <symbol name="fit_load_start"           address="ucode:0x6e160" type="code" entry="true"/>
+        <symbol name="process_next_fit_xlat"    address="ucode:0x6e420" type="code" entry="true"/>
+        <symbol name="non_ucode_fit_xlat_found" address="ucode:0x6e4c0" type="code" entry="true"/>
+        <symbol name="rsa_decrypt"              address="ucode:0x735c0" type="code" entry="true"/>
+        <symbol name="enclu_impl"               address="ucode:0x75c60" type="code" entry="true"/>
+        
+        <!-- CREG -->
+        <symbol name="CORE_CR_CUR_RIP"          address="crbus:0x067"/>
+        <symbol name="CORE_CR_CUR_UIP"          address="crbus:0x068"/>
+        <symbol name="CTAP_CR_DFX_CTL_STS"      address="crbus:0x285"/>
+        <symbol name="UCODE_CR_X2APIC_TPR"      address="crbus:0x288"/>
+        <symbol name="UCODE_CR_X2APIC_EOI"      address="crbus:0x28b"/>
+        <symbol name="UCODE_CR_PPPE_EVENT_STATUS"       address="crbus:0x29f"/>
+        <symbol name="ML3_CR_PIC_GLOBAL_EVENT_INHIBIT"  address="crbus:0x2c4"/>
+        <symbol name="ROB1_CR_ICECTLPMR"        address="crbus:0x2df"/>
+        <symbol name="PMH_CR_CR3"               address="crbus:0x528"/>
+        <symbol name="PMH_CR_SMRR_BASE"         address="crbus:0x572"/>
+        <symbol name="PMH_CR_SMRR_MASK"         address="crbus:0x573"/>
+        <symbol name="PMH_CR_EMRR_BASE"         address="crbus:0x574"/>
+        <symbol name="PMH_CR_EMRR_MASK"         address="crbus:0x575"/>
+        <symbol name="CORE_CR_CR4"              address="crbus:0x7c5"/>
+        <symbol name="CORE_CR_CR0"              address="crbus:0x7f6"/>
+        <symbol name="CORE_CR_EFLAGS"   address="crbus:0x7fe"/>
+        
+        <!-- Macro Aliases -->
+        <symbol name="MACRO_IMM"        address="alias:0x00"/>
+        <symbol name="MACRO_RIP"        address="alias:0x04"/>
+        <symbol name="MACRO_STi"        address="alias:0x05"/>
+        <symbol name="MSLOOPCTR"        address="alias:0x08"/>
+        <symbol name="MACRO_DATASIZE"   address="alias:0x0b"/>
+        <symbol name="MACRO_INSTR"      address="alias:0x10"/>
+        
+        <!-- Segment Descriptors -->
+        <symbol name="DS32_SEL"         address="segdesc:0x000"/>
+        <symbol name="DS32_FLAGS"       address="segdesc:0x008"/>
+        <symbol name="DS32_BASE"        address="segdesc:0x010"/>
+        <symbol name="DS32_LIM"         address="segdesc:0x018"/>
+        <symbol name="DS32_UNK1"        address="segdesc:0x020"/>
+        <symbol name="DS32_UNK2"        address="segdesc:0x028"/>
+        <symbol name="CS_SEL"           address="segdesc:0x060"/>
+        <symbol name="CS_FLAGS"         address="segdesc:0x068"/>
+        <symbol name="CS_BASE"          address="segdesc:0x070"/>
+        <symbol name="CS_LIM"           address="segdesc:0x078"/>
+        <symbol name="CS_UNK1"          address="segdesc:0x080"/>
+        <symbol name="CS_UNK2"          address="segdesc:0x088"/>
+        <symbol name="SS_SEL"           address="segdesc:0x090"/>
+        <symbol name="SS_FLAGS"         address="segdesc:0x098"/>
+        <symbol name="SS_BASE"          address="segdesc:0x0a0"/>
+        <symbol name="SS_LIM"           address="segdesc:0x0a8"/>
+        <symbol name="SS_UNK1"          address="segdesc:0x0b0"/>
+        <symbol name="SS_UNK2"          address="segdesc:0x0b8"/>
+        <symbol name="UNK_SEG_04_SEL"   address="segdesc:0x0c0"/>
+        <symbol name="UNK_SEG_04_FLAGS" address="segdesc:0x0c8"/>
+        <symbol name="UNK_SEG_04_BASE"  address="segdesc:0x0d0"/>
+        <symbol name="UNK_SEG_04_LIM"   address="segdesc:0x0d8"/>
+        <symbol name="UNK_SEG_04_UNK1"  address="segdesc:0x0e0"/>
+        <symbol name="UNK_SEG_04_UNK2"  address="segdesc:0x0e8"/>
+        <symbol name="DS16_SEL"         address="segdesc:0x0f0"/>
+        <symbol name="DS16_FLAGS"       address="segdesc:0x0f8"/>
+        <symbol name="DS16_BASE"        address="segdesc:0x100"/>
+        <symbol name="DS16_LIM"         address="segdesc:0x108"/>
+        <symbol name="DS16_UNK1"        address="segdesc:0x110"/>
+        <symbol name="DS16_UNK2"        address="segdesc:0x118"/>
+        <symbol name="GDT_SEL"          address="segdesc:0x120"/>
+        <symbol name="GDT_FLAGS"        address="segdesc:0x128"/>
+        <symbol name="GDT_BASE"         address="segdesc:0x130"/>
+        <symbol name="GDT_LIM"          address="segdesc:0x138"/>
+        <symbol name="GDT_UNK1"         address="segdesc:0x140"/>
+        <symbol name="GDT_UNK2"         address="segdesc:0x148"/>
+        <symbol name="LDT_SEL"          address="segdesc:0x150"/>
+        <symbol name="LDT_FLAGS"        address="segdesc:0x158"/>
+        <symbol name="LDT_BASE"         address="segdesc:0x160"/>
+        <symbol name="LDT_LIM"          address="segdesc:0x168"/>
+        <symbol name="LDT_UNK1"         address="segdesc:0x170"/>
+        <symbol name="LDT_UNK2"         address="segdesc:0x178"/>
+        <symbol name="ES_SEL"           address="segdesc:0x180"/>
+        <symbol name="ES_FLAGS"         address="segdesc:0x188"/>
+        <symbol name="ES_BASE"          address="segdesc:0x190"/>
+        <symbol name="ES_LIM"           address="segdesc:0x198"/>
+        <symbol name="ES_UNK1"          address="segdesc:0x1a0"/>
+        <symbol name="ES_UNK2"          address="segdesc:0x1a8"/>
+        <symbol name="UNK_SEG_09_SEL"   address="segdesc:0x1b0"/>
+        <symbol name="UNK_SEG_09_FLAGS" address="segdesc:0x1b8"/>
+        <symbol name="UNK_SEG_09_BASE"  address="segdesc:0x1c0"/>
+        <symbol name="UNK_SEG_09_LIM"   address="segdesc:0x1c8"/>
+        <symbol name="UNK_SEG_09_UNK1"  address="segdesc:0x1d0"/>
+        <symbol name="UNK_SEG_09_UNK2"  address="segdesc:0x1d8"/>
+        <symbol name="SS_USER_SEL"      address="segdesc:0x1e0"/>
+        <symbol name="SS_USER_FLAGS"    address="segdesc:0x1e8"/>
+        <symbol name="SS_USER_BASE"     address="segdesc:0x1f0"/>
+        <symbol name="SS_USER_LIM"      address="segdesc:0x1f8"/>
+        <symbol name="SS_USER_UNK1"     address="segdesc:0x200"/>
+        <symbol name="SS_USER_UNK2"     address="segdesc:0x208"/>
+        <symbol name="DS_SEL"           address="segdesc:0x210"/>
+        <symbol name="DS_FLAGS"         address="segdesc:0x218"/>
+        <symbol name="DS_BASE"          address="segdesc:0x220"/>
+        <symbol name="DS_LIM"           address="segdesc:0x228"/>
+        <symbol name="DS_UNK1"          address="segdesc:0x230"/>
+        <symbol name="DS_UNK2"          address="segdesc:0x238"/>
+        <symbol name="FS_SEL"           address="segdesc:0x240"/>
+        <symbol name="FS_FLAGS"         address="segdesc:0x248"/>
+        <symbol name="FS_BASE"          address="segdesc:0x250"/>
+        <symbol name="FS_LIM"           address="segdesc:0x258"/>
+        <symbol name="FS_UNK1"          address="segdesc:0x260"/>
+        <symbol name="FS_UNK2"          address="segdesc:0x268"/>
+        <symbol name="GS_SEL"           address="segdesc:0x270"/>
+        <symbol name="GS_FLAGS"         address="segdesc:0x278"/>
+        <symbol name="GS_BASE"          address="segdesc:0x280"/>
+        <symbol name="GS_LIM"           address="segdesc:0x288"/>
+        <symbol name="GS_UNK1"          address="segdesc:0x290"/>
+        <symbol name="GS_UNK2"          address="segdesc:0x298"/>
+        <symbol name="IDT_SEL"          address="segdesc:0x2a0"/>
+        <symbol name="IDT_FLAGS"        address="segdesc:0x2a8"/>
+        <symbol name="IDT_BASE"         address="segdesc:0x2b0"/>
+        <symbol name="IDT_LIM"          address="segdesc:0x2b8"/>
+        <symbol name="IDT_UNK1"         address="segdesc:0x2c0"/>
+        <symbol name="IDT_UNK2"         address="segdesc:0x2c8"/>
+        <symbol name="TSS_SEL"          address="segdesc:0x2d0"/>
+        <symbol name="TSS_FLAGS"        address="segdesc:0x2d8"/>
+        <symbol name="TSS_BASE"         address="segdesc:0x2e0"/>
+        <symbol name="TSS_LIM"          address="segdesc:0x2e8"/>
+        <symbol name="TSS_UNK1"         address="segdesc:0x2f0"/>
+        <symbol name="TSS_UNK2"         address="segdesc:0x2f8"/>
+        <symbol name="UNK_SEG_10_SEL"   address="segdesc:0x300"/>
+        <symbol name="UNK_SEG_10_FLAGS" address="segdesc:0x308"/>
+        <symbol name="UNK_SEG_10_BASE"  address="segdesc:0x310"/>
+        <symbol name="UNK_SEG_10_LIM"   address="segdesc:0x318"/>
+        <symbol name="UNK_SEG_10_UNK1"  address="segdesc:0x320"/>
+        <symbol name="UNK_SEG_10_UNK2"  address="segdesc:0x328"/>
+        <symbol name="UNK_SEG_11_SEL"   address="segdesc:0x330"/>
+        <symbol name="UNK_SEG_11_FLAGS" address="segdesc:0x338"/>
+        <symbol name="UNK_SEG_11_BASE"  address="segdesc:0x340"/>
+        <symbol name="UNK_SEG_11_LIM"   address="segdesc:0x348"/>
+        <symbol name="UNK_SEG_11_UNK1"  address="segdesc:0x350"/>
+        <symbol name="UNK_SEG_11_UNK2"  address="segdesc:0x358"/>
+        <symbol name="SS_KERN_SEL"      address="segdesc:0x480"/>
+        <symbol name="SS_KERN_FLAGS"    address="segdesc:0x488"/>
+        <symbol name="SS_KERN_BASE"     address="segdesc:0x490"/>
+        <symbol name="SS_KERN_LIM"      address="segdesc:0x498"/>
+        <symbol name="SS_KERN_UNK1"     address="segdesc:0x4a0"/>
+        <symbol name="SS_KERN_UNK2"     address="segdesc:0x4a8"/>
+        <symbol name="DS_KERN_SEL"      address="segdesc:0x4b0"/>
+        <symbol name="DS_KERN_FLAGS"    address="segdesc:0x4b8"/>
+        <symbol name="DS_KERN_BASE"     address="segdesc:0x4c0"/>
+        <symbol name="DS_KERN_LIM"      address="segdesc:0x4c8"/>
+        <symbol name="DS_KERN_UNK1"     address="segdesc:0x4d0"/>
+        <symbol name="DS_KERN_UNK2"     address="segdesc:0x4d8"/>
+        <symbol name="UNK_SEG_1b_SEL"   address="segdesc:0x510"/>
+        <symbol name="UNK_SEG_1b_FLAGS" address="segdesc:0x518"/>
+        <symbol name="UNK_SEG_1b_BASE"  address="segdesc:0x520"/>
+        <symbol name="UNK_SEG_1b_LIM"   address="segdesc:0x528"/>
+        <symbol name="UNK_SEG_1b_UNK1"  address="segdesc:0x530"/>
+        <symbol name="UNK_SEG_1b_UNK2"  address="segdesc:0x538"/>
+        <symbol name="SEG_V0_SEL"       address="segdesc:0x540"/>
+        <symbol name="SEG_V0_FLAGS"     address="segdesc:0x548"/>
+        <symbol name="SEG_V0_BASE"      address="segdesc:0x550"/>
+        <symbol name="SEG_V0_LIM"       address="segdesc:0x558"/>
+        <symbol name="SEG_V0_UNK1"      address="segdesc:0x560"/>
+        <symbol name="SEG_V0_UNK2"      address="segdesc:0x568"/>
+        </default_symbols>
+</processor_spec>

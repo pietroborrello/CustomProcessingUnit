@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- See Relax specification: Ghidra/Framework/SoftwareModeling/data/languages/language_definitions.rxg -->
+
+<language_definitions>
+   <language processor="x86ucode"
+            endian="little"
+            size="64"
+            variant="default"
+            version="1.0"
+            slafile="x86ucode.sla"
+            processorspec="x86ucode.pspec"
+            id="x86ucode:LE:64:default">
+    <description>x86 GLM ucode</description>
+    <compiler name="default" spec="x86ucode.cspec" id="default"/>
+  </language> 
+</language_definitions>
