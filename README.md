@@ -1,5 +1,7 @@
 # Custom Processing Unit
 
+[![DOI](https://zenodo.org/badge/522085221.svg)](https://zenodo.org/badge/latestdoi/522085221)
+
 <img src="./images/cpu_logo.svg" width=150>
 
 Custom Processing Unit is the first dynamic analysis framework able to hook, patch and trace CPU microcode at the software level.
