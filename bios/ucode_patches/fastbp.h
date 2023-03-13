@@ -1,4 +1,6 @@
 unsigned long addr = 0x7c00;
+unsigned long hook_address = 0x0c40;
+unsigned long hook_entry = 0x00;
 unsigned long ucode_patch[][4] = {
     // U7c00: tmp1:= LDSTGBUF_DSZ64_ASZ16_SC1(0xba00); tmp2:= ZEROEXT_DSZ64(0x1); tmp0:= ZEROEXT_DSZ64(IMM_MACRO_ALIAS_RIP) !m0
     {0x8e75006b100d, 0x404801032008, 0x404804830008, 0x300000c0},

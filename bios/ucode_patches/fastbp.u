@@ -1,4 +1,6 @@
 .org 0x7c00
+.patch 0xc40
+.entry 0
 
 tmp1:= LDSTGBUF_DSZ64_ASZ16_SC1(0xba00)
 tmp2:= ZEROEXT_DSZ64(0x1)
