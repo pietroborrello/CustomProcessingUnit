@@ -2,3 +2,4 @@
 *.so
 *.pyc
 .vscode
+cpu.efi
