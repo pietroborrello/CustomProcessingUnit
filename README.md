@@ -9,7 +9,7 @@ Custom Processing Unit is the first dynamic analysis framework able to hook, pat
 It works by leveraging [undocumented instructions](https://github.com/chip-red-pill/udbgInstr) in Intel CPUs that allow access to the CRBUS.
 Using our [microcode decompiler](https://github.com/pietroborrello/ghidra-atom-microcode) we reverse engineered how the CPU uses the CRBUS and by replicating the interactions we have full control of the CPU.
 
-Find the static analysis framework as subtree in [this](./ghidra-processor-module) repo, or at https://github.com/pietroborrello/ghidra-atom-microcode.
+Find the static analysis framework as subtree in [this](./ghidra-processor-module) folder, or at https://github.com/pietroborrello/ghidra-atom-microcode.
 
 Check out our slides describing this work [here](./slides.pdf).
 
