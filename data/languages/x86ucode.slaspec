@@ -1,0 +1,2249 @@
+# Basic ================================================================================
+define endian=little;
+define alignment=0x10;
+
+@define INSTR_LEN 16
+
+define space ucode		type=ram_space size=8 default;
+define space register	type=register_space size=2;
+define space uram		type=ram_space size=2 wordsize=8;
+define space crbus		type=ram_space size=2 wordsize=8;
+define space mem		type=ram_space size=8 wordsize=1; # physical memory
+# define macro-instruction data aliases as a memory region
+# each address refers to some data in the associated macro-instruction, most are not used, some of them are used but unknown
+define space alias		type=ram_space size=1 wordsize=8;
+
+# map segment descriptors in a memory region
+define space segdesc	type=ram_space size=2 wordsize=1;
+
+# fake a stack pointer for the decompilation
+define space dummy_space type=ram_space size=2;
+define register offset=0xf000 size=8 [dummy_reg PC];
+
+# Registers ============================================================================
+define register offset=0x00 size=8 [
+	rax rbx rcx rdx rsp rbp rsi rdi r8 r9 r10 r11 r12 r13 r14 r15 
+	tmp0 tmp1 tmp2 tmp3 tmp4 tmp5 tmp6 tmp7 tmp8 tmp9 tmp10 tmp11 tmp12 tmp13 tmp14 tmp15 
+	tmpv0 tmpv1 tmpv2 tmpv3 
+	r64dst r64src r64base r64idx
+	uip0 uip1];
+	# msloopctr: the msloopctr is modeled as an address since it may also be referred through macro aliases
+# NOTICE: all the instructions filling uop0/uop1 are shown with the ghidra_address (ghidra_address=ucode_address*INSTR_LEN),
+# but the pcode uses the ucode_address to preserve correctness
+# should fix by setting the ucode wordsize to INSTR_LEN, but it is not supported
+
+define register offset=0x1000 size=16 [
+	xmm0 xmm1 xmm2 xmm3 xmm4 xmm5 xmm6 xmm7 xmm8 xmm9 xmm10 xmm11 xmm12 xmm13 xmm14 xmm15 
+	mm0 mm1 mm2 mm3 mm4 mm5 mm6 mm7 
+	tmm0 tmm1 tmm2 tmm3 tmm4 tmm5 tmm6 tmm7 
+	tmmv0 tmmv1 tmmv2 tmmv3
+	xmmdst xmmsrc
+];
+
+# tmp0-15 regs have each a flags register
+define register offset=0x2000 size=1 [
+	tmp0_OF tmp1_OF tmp2_OF tmp3_OF tmp4_OF tmp5_OF tmp6_OF tmp7_OF tmp8_OF tmp9_OF tmp10_OF tmp11_OF tmp12_OF tmp13_OF tmp14_OF tmp15_OF
+	tmp0_CF tmp1_CF tmp2_CF tmp3_CF tmp4_CF tmp5_CF tmp6_CF tmp7_CF tmp8_CF tmp9_CF tmp10_CF tmp11_CF tmp12_CF tmp13_CF tmp14_CF tmp15_CF
+	tmp0_ZF tmp1_ZF tmp2_ZF tmp3_ZF tmp4_ZF tmp5_ZF tmp6_ZF tmp7_ZF tmp8_ZF tmp9_ZF tmp10_ZF tmp11_ZF tmp12_ZF tmp13_ZF tmp14_ZF tmp15_ZF
+	tmp0_SF tmp1_SF tmp2_SF tmp3_SF tmp4_SF tmp5_SF tmp6_SF tmp7_SF tmp8_SF tmp9_SF tmp10_SF tmp11_SF tmp12_SF tmp13_SF tmp14_SF tmp15_SF
+	tmp0_PF tmp1_PF tmp2_PF tmp3_PF tmp4_PF tmp5_PF tmp6_PF tmp7_PF tmp8_PF tmp9_PF tmp10_PF tmp11_PF tmp12_PF tmp13_PF tmp14_PF tmp15_PF
+	tmpv0_OF tmpv1_OF tmpv2_OF tmpv3_OF
+	tmpv0_CF tmpv1_CF tmpv2_CF tmpv3_CF
+	tmpv0_ZF tmpv1_ZF tmpv2_ZF tmpv3_ZF
+	tmpv0_SF tmpv1_SF tmpv2_SF tmpv3_SF
+	tmpv0_PF tmpv1_PF tmpv2_PF tmpv3_PF
+	dummy_F
+	OF CF ZF SF PF DF # global flags
+];
+
+# we represent the conditions that testustate checks as registers
+# (notice: this is not precise, as there is no such uarch reg in reality)
+define register offset=0x3000 size=2 [
+	ucode_ustate sys_ustate vmx_ustate
+];
+
+# Fields =================================================================================
+define token _uop(64)
+	full_uop = (0, 47)
+	src0   = (0,  5)
+		src0_xmm   = (0,  5)
+		src0_sel   = (0,  5)
+		src0_OF   = (0,  5)
+		src0_CF   = (0,  5)
+		src0_ZF   = (0,  5)
+		src0_SF   = (0,  5)
+		src0_PF   = (0,  5)
+	src1   = (6,  11)
+		src1_xmm   = (6,  11)
+		src1_sel   = (6,  11)
+		src1_OF   = (6,  11)
+		src1_CF   = (6,  11)
+		src1_ZF   = (6,  11)
+		src1_SF   = (6,  11)
+		src1_PF   = (6,  11)
+		src1_sel_low3 = (6, 8)
+	dst    = (12, 17)
+		dst_xmm    = (12, 17)
+		dst_sel    = (12, 17)
+		dst_OF    = (12, 17)
+		dst_CF    = (12, 17)
+		dst_ZF    = (12, 17)
+		dst_SF    = (12, 17)
+		dst_PF    = (12, 17)
+		dst_16    = (16, 16)
+	imm1   = (18, 22)
+		rseg_sel   = (18, 22)
+		imm1_sel   = (18, 19)
+	m0     = (23, 23)
+		uip_reg = (23, 23)
+	imm0   = (24, 31)
+		imm0_sel0  = (24, 31)
+		imm0_sel1  = (24, 31)
+		imm0_sel2  = (24, 31)
+		imm0_sel3  = (24, 31)
+		MOP_alias  = (24, 31)
+		wseg_sel   = (24, 27)
+		segfld_sel = (28, 31)
+		imm0_low8  = (24, 27)
+	opcode = (32, 43)
+		dst_size = (38, 39)
+		dst_size_val = (38, 39)
+		dst_size_mask = (38, 39)
+		dst_size_sel = (38, 39)
+		cond_0 = (32,33)
+		cond_1 = (36, 36)
+		cond_2 = (40, 41)
+		phys_scale_sel = (36, 37)
+		ldx_scale_sel  = (40 ,41)
+	m1     = (44, 44)
+	m2     = (45, 45)
+		testustate_mode     = (44, 45)
+		testustate_mode_sel = (44, 45)
+	uknown = (46, 47)
+	is_src0_imm = (48, 48)
+	is_src1_imm = (49, 49)
+	uop_with_saveuip_next = (50, 50)
+	uop_pad= (51, 63)
+;
+
+# ATTACH REGISTER NAMES
+attach variables [ src0 src1 ] [ 
+	_ r64dst r64src rdi r64base r64idx rdx rdx _ _ _ _ _ _ _ _ 
+	_ tmp2 tmp0 tmp7 tmpv0 tmpv1 tmpv2 tmpv3 _ _ _ _ _ _ _ _ 
+	rax rcx rdx rbx rsp rbp rsi rdi r8 r9 r10 r11 r12 r13 r14 r15 
+	tmp0 tmp1 tmp2 tmp3 tmp4 tmp5 tmp6 tmp7 tmp8 tmp9 tmp10 tmp11 tmp12 tmp13 tmp14 tmp15
+];
+attach variables [ src0_xmm src1_xmm ] [ 
+	_ xmmdst xmmsrc xmm7 _ _ xmm2 xmm2 _ _ _ _ _ _ _ _ _ 
+	mm2 mm0 mm7 tmmv0 tmmv1 tmmv2 tmmv3 _ _ _ _ _ _ _ _ 
+	xmm0 xmm1 xmm2 xmm3 xmm4 xmm5 xmm6 xmm7 xmm8 xmm9 xmm10 xmm11 xmm12 xmm13 xmm14 xmm15 
+	mm0 mm1 mm2 mm3 mm4 mm5 mm6 mm7 tmm0 tmm1 tmm2 tmm3 tmm4 tmm5 tmm6 tmm7
+];
+
+attach variables [ dst ] [ 
+	dummy_reg r64dst rax rdi rax rax rdx rdx tmp0 tmp7 tmp0 tmp0 tmp0 tmp7 tmp0 tmp0 
+	_ tmp2 tmp0 tmp7 tmpv0 tmpv1 tmpv2 tmpv3 tmp0 tmp7 tmp0 tmp0 tmp0 tmp7 tmp0 tmp0 
+	rax rcx rdx rbx rsp rbp rsi rdi r8 r9 r10 r11 r12 r13 r14 r15 
+	tmp0 tmp1 tmp2 tmp3 tmp4 tmp5 tmp6 tmp7 tmp8 tmp9 tmp10 tmp11 tmp12 tmp13 tmp14 tmp15
+];
+attach variables [ dst_xmm ] [ 
+	_ xmm2 xmm0 xmm7 xmm0 xmm0 xmm2 xmm2 mm0 mm7 mm0 mm0 mm0 mm7 mm0 mm0 _ 
+	mm2 mm0 mm7 tmmv0 tmmv1 tmmv2 tmmv3 mm0 mm7 mm0 mm0 mm0 mm7 mm0 mm0 
+	xmm0 xmm1 xmm2 xmm3 xmm4 xmm5 xmm6 xmm7 xmm8 xmm9 xmm10 xmm11 xmm12 xmm13 xmm14 xmm15 
+	mm0 mm1 mm2 mm3 mm4 mm5 mm6 mm7 tmm0 tmm1 tmm2 tmm3 tmm4 tmm5 tmm6 tmm7
+];
+
+# attach tmp flags, architectural registers are mapped to the global flags, since sometime are used after genarithflags
+attach variables [ dst_OF src0_OF src1_OF ] [ 
+    dummy_F OF      OF      OF      OF      OF      OF      OF      tmp0_OF tmp7_OF tmp0_OF tmp0_OF tmp0_OF tmp7_OF tmp0_OF tmp0_OF 
+    dummy_F tmp2_OF tmp0_OF tmp7_OF tmpv0_OF tmpv1_OF tmpv2_OF tmpv3_OF tmp0_OF tmp7_OF tmp0_OF tmp0_OF tmp0_OF tmp7_OF tmp0_OF tmp0_OF 
+    OF      OF      OF      OF      OF      OF      OF      OF      OF      OF      OF      OF      OF      OF      OF      OF      
+    tmp0_OF tmp1_OF tmp2_OF tmp3_OF tmp4_OF tmp5_OF tmp6_OF tmp7_OF tmp8_OF tmp9_OF tmp10_OF tmp11_OF tmp12_OF tmp13_OF tmp14_OF tmp15_OF
+];
+attach variables [ dst_CF src0_CF src1_CF ] [ 
+    dummy_F CF      CF      CF      CF      CF      CF      CF      tmp0_CF tmp7_CF tmp0_CF tmp0_CF tmp0_CF tmp7_CF tmp0_CF tmp0_CF 
+    dummy_F tmp2_CF tmp0_CF tmp7_CF tmpv0_CF tmpv1_CF tmpv2_CF tmpv3_CF tmp0_CF tmp7_CF tmp0_CF tmp0_CF tmp0_CF tmp7_CF tmp0_CF tmp0_CF 
+    CF      CF      CF      CF      CF      CF      CF      CF      CF      CF      CF      CF      CF      CF      CF      CF      
+    tmp0_CF tmp1_CF tmp2_CF tmp3_CF tmp4_CF tmp5_CF tmp6_CF tmp7_CF tmp8_CF tmp9_CF tmp10_CF tmp11_CF tmp12_CF tmp13_CF tmp14_CF tmp15_CF
+];
+attach variables [ dst_ZF src0_ZF src1_ZF ] [ 
+    dummy_F ZF      ZF      ZF      ZF      ZF      ZF      ZF      tmp0_ZF tmp7_ZF tmp0_ZF tmp0_ZF tmp0_ZF tmp7_ZF tmp0_ZF tmp0_ZF 
+    dummy_F tmp2_ZF tmp0_ZF tmp7_ZF tmpv0_ZF tmpv1_ZF tmpv2_ZF tmpv3_ZF tmp0_ZF tmp7_ZF tmp0_ZF tmp0_ZF tmp0_ZF tmp7_ZF tmp0_ZF tmp0_ZF 
+    ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      ZF      
+    tmp0_ZF tmp1_ZF tmp2_ZF tmp3_ZF tmp4_ZF tmp5_ZF tmp6_ZF tmp7_ZF tmp8_ZF tmp9_ZF tmp10_ZF tmp11_ZF tmp12_ZF tmp13_ZF tmp14_ZF tmp15_ZF
+];
+attach variables [ dst_SF src0_SF src1_SF ] [ 
+    dummy_F SF      SF      SF      SF      SF      SF      SF      tmp0_SF tmp7_SF tmp0_SF tmp0_SF tmp0_SF tmp7_SF tmp0_SF tmp0_SF 
+    dummy_F tmp2_SF tmp0_SF tmp7_SF tmpv0_SF tmpv1_SF tmpv2_SF tmpv3_SF tmp0_SF tmp7_SF tmp0_SF tmp0_SF tmp0_SF tmp7_SF tmp0_SF tmp0_SF 
+    SF      SF      SF      SF      SF      SF      SF      SF      SF      SF      SF      SF      SF      SF      SF      SF      
+    tmp0_SF tmp1_SF tmp2_SF tmp3_SF tmp4_SF tmp5_SF tmp6_SF tmp7_SF tmp8_SF tmp9_SF tmp10_SF tmp11_SF tmp12_SF tmp13_SF tmp14_SF tmp15_SF
+];
+attach variables [ dst_PF src0_PF src1_PF ] [ 
+    dummy_F PF      PF      PF      PF      PF      PF      PF      tmp0_PF tmp7_PF tmp0_PF tmp0_PF tmp0_PF tmp7_PF tmp0_PF tmp0_PF 
+    dummy_F tmp2_PF tmp0_PF tmp7_PF tmpv0_PF tmpv1_PF tmpv2_PF tmpv3_PF tmp0_PF tmp7_PF tmp0_PF tmp0_PF tmp0_PF tmp7_PF tmp0_PF tmp0_PF 
+    PF      PF      PF      PF      PF      PF      PF      PF      PF      PF      PF      PF      PF      PF      PF      PF      
+    tmp0_PF tmp1_PF tmp2_PF tmp3_PF tmp4_PF tmp5_PF tmp6_PF tmp7_PF tmp8_PF tmp9_PF tmp10_PF tmp11_PF tmp12_PF tmp13_PF tmp14_PF tmp15_PF
+];
+attach names [dst_size] [
+	"32" "64" "16" "8" 
+];
+attach values [dst_size_val] [
+	32 64 16 8 
+];
+attach values [dst_size_mask] [
+	0xffffffff 0xffffffffffffffff 0xffff 0xff
+];
+
+attach variables [uip_reg] [uip0 uip1];
+attach variables [testustate_mode] [ucode_ustate sys_ustate vmx_ustate _];
+
+# create the 4 tables to express hardcoded immediates
+attach values [imm0_sel0] [
+	0x1 0x2 0x3 0x4 0x8 0x10 0x1f 0x20 0x24 0x40 0x7f 0x80 0x100 0x1bf 0x200 0x301 
+	0x341 0x381 0x400 0x404 0x504 0x800 0x9bf 0xfff 0x1000 0x11fb 0x1f80 0x2000 0x4000 0x591c 0x6000 0x7000 
+	0x7800 0x7c00 0x7c04 0x7e00 0x7f00 0x7f80 0x8000 0x8001 0x8008 0x8009 0x8080 0xa09b 0xb615 0xc000 0xc001 0xc09b 
+	0xc802 0xe000 0xe904 0xf000 0xf800 0xfade 0xfc00 0xfc01 0xfe00 0xff00 0xff80 0xff81 0xffb9 0xffbb 0xffc0 0xffd7 
+	0xffe0 0xfff0 0xfff8 0xfffc 0xfffd 0xfffe 0xffff 0x10000 0x10003 0x10004 0x10006 0x10007 0x10008 0x1000a 0x1000b 0x1000d 
+	0x1000e 0x1000f 0x10011 0x10013 0x10014 0x10015 0x10018 0x1001e 0x1003a 0x1003e 0x10203 0x10300 0x10800 0x11000 0x13fff 0x14000 
+	0x14809 0x16809 0x18000 0x18009 0x19ffe 0x1c000 0x1e000 0x1f000 0x1f800 0x1fc00 0x1fe00 0x1ff00 0x1ff80 0x1ffc0 0x1ffe0 0x1fff0 
+	0x1fff8 0x1fffc 0x1fffe 0x1ffff 0x20000 0x20003 0x2001b 0x2001c 0x20020 0x20101 0x20200 0x30000 0x30012 0x30036 0x3003f 0x30101 
+	0x3017f 0x30200 0x30300 0x30400 0x30600 0x34100 0x36dfb 0x36dff 0x38000 0x38003 0x3c000 0x3e000 0x3efc4 0x3f000 0x3f800 0x3fc00 
+	0x3fe00 0x3ff00 0x3ff80 0x3ffc0 0x3ffc1 0x3ffe0 0x3fff0 0x3fff8 0x3fffc 0x3ffff 0x40000 0x40001 0x50000 0x50300 0x506c0 0x60000 
+	0x61101 0x70000 0x78000 0x7c000 0x7e000 0x7f000 0x7f800 0x7fc00 0x7fe00 0x7ff00 0x7ff80 0x7ffc0 0x7ffe0 0x7fff0 0x7fff8 0x80000 
+	0x80001 0x8000f 0x84400 0x90000 0x90100 0x9cdfd 0xc0000 0xe0000 0xe88c8 0xf0000 0xf8000 0xfc000 0xfe000 0xff000 0xff800 0xffc00 
+	0xffe00 0xfff00 0xfff80 0xfffc0 0xfffe0 0xffff0 0xffff8 0xfffff 0x100000 0x1000b0 0x110016 0x110017 0x110406 0x140000 0x15a7ff 0x180000 
+	0x1a3202 0x1c0000 0x1dcfff 0x1e0000 0x1f0000 0x1f8000 0x1fc000 0x1fe000 0x1ff000 0x1ff800 0x1ffc00 0x1ffe00 0x1fff00 0x1fff80 0x1fffc0 0x1fffe0 
+	0x1fffff 0x200000 0x2001c1 0x200201 0x254500 0x254dd5 0x254fd5 0x257700 0x257fd5 0x2c6000 0x2c6800 0x300000 0x380000 0x3c0000 0x3c4dd7 0x3c7fd7 
+	0x3dcfff 0x3e0000 0x3f0000 0x3f3fd7 0x3f7700 0x3f7fd5 0x3f8000 0x3fc000 0x3fe000 0x3ff000 0x3ff800 0x3ffc00 0x3ffe00 0x3fff00 0x3fff80 0x3fffc0
+];
+attach values [imm0_sel1] [
+	0x400000 0x400001 0x4001c1 0x400281 0x4002c1 0x4004c1 0x400501 0x400541 0x400601 0x410000 0x520201 0x523000 0x523300 0x523700 0x5a0201 0x600000 
+	0x600201 0x640fa0 0x700000 0x700084 0x780000 0x790484 0x7c0000 0x7dafdf 0x7e0000 0x7f0000 0x7f8000 0x7fc000 0x7fcfcc 0x7fe000 0x7ff000 0x7ff800 
+	0x7ffc00 0x7ffe00 0x7fff00 0x7fff80 0x7fffff 0x800000 0x800002 0x800012 0x811088 0x830c00 0x830f00 0xc00000 0xc41089 0xda0400 0xe00000 0xf00000 
+	0xf80000 0xfc0000 0xfe0000 0xff0000 0xff8000 0xffc000 0xffe000 0xfff000 0xfff800 0xfffc00 0xfffe00 0xffff00 0xffffff 0x1000000 0x1800000 0x1c00000 
+	0x1e00000 0x1f00000 0x1f80000 0x1fc0000 0x1fe0000 0x1ff0000 0x1ff8000 0x1ffc000 0x1ffe000 0x1fff000 0x1fff800 0x1fffc00 0x1fffe00 0x1ffffff 0x2000000 0x3000000 
+	0x3030303 0x30fc000 0x3800000 0x388e90c 0x3c00000 0x3e00000 0x3e80190 0x3f00000 0x3f80000 0x3fc0000 0x3fe0000 0x3ff0000 0x3ff8000 0x3ffc000 0x3ffe000 0x3fff000 
+	0x3fff800 0x3fffc00 0x4000000 0x4006172 0x401e172 0x4040404 0x4050607 0x4066173 0x4400581 0x44005c1 0x4410141 0x6000000 0x6334141 0x7000000 0x7800000 0x7c00000 
+	0x7e00000 0x7f00000 0x7f80000 0x7fc0000 0x7fe0000 0x7ff0000 0x7ff8000 0x7ffc000 0x7ffe000 0x7fff000 0x7fff800 0x8000000 0x8000040 0x8090a0b 0xb180000 0xb1a0000 
+	0xc000000 0xc0d0e0f 0xe000000 0xe351212 0xf000000 0xf800000 0xfc00000 0xfe00000 0xff00000 0xff80000 0xffc0000 0xffe0000 0xfff0000 0xfff8000 0xfffc000 0xfffe000 
+	0xffff000 0xfffffff 0x10000000 0x1003fff7 0x11242020 0x11242120 0x18000000 0x1c000000 0x1d90453a 0x1e000000 0x1f000000 0x1f800000 0x1f83d9ab 0x1fc00000 0x1fe00000 0x1ff00000 
+	0x1ff80000 0x1ffc0000 0x1ffe0000 0x1fff0000 0x1fff8000 0x1fffc000 0x1fffe000 0x20000000 0x200fffff 0x2020205f 0x28000000 0x2e140788 0x30000000 0x38000000 0x3c000000 0x3c6ef372 
+	0x3e000000 0x3f000000 0x3f1586cb 0x3f800000 0x3fc00000 0x3fe00000 0x3ff00000 0x3ff80000 0x3ffc0000 0x3ffe0000 0x3fff0000 0x3fff8000 0x3fffc000 0x3ffff000 0x40000000 0x40000003 
+	0x4000004c 0x40004658 0x40004680 0x400046f0 0x40004e00 0x40004e80 0x4000506c 0x400050a0 0x400050e4 0x40005110 0x40005114 0x40005140 0x40005144 0x41b7b4a1 0x41b96981 0x41ff0100 
+	0x41ff01ff 0x4959f260 0x49656e69 0x50000000 0x510e527f 0x5449465f 0x5be0cd19 0xed17ed0 0x60000000 0x600401e7 0x6004c1e7 0x6a09673c 0x6a09e667 0x6c65746e 0x6ea2ea0f 0x70000000 
+	0x756e6547 0x78000000 0x7c000000 0x7e000000 0x7f000000 0x7f800000 0x7fc00000 0x7fe00000 0x7ff00000 0x7ff80000 0x7ffc0000 0x7ffe0000 0x7fff0000 0x7fff8000 0x7ffff000 0x7ffffc00 
+	0x80000000 0x80000001 0x8000000d 0x80000021 0x80000033 0x80000301 0x80000501 0x80000603 0x80000700 0x80000701 0x80000b0e 0x8000f0c0 0x8000f0e0 0x8005003f 0x80fffffc 0x817f20e0
+];
+attach values [imm0_sel2] [
+	0x817f40c0 0x817f40e0 0x90810720 0xed17ed0 0x9b05688c 0xed17ed0 0xa0000000 0xa00f001e 0xa54ff53a 0xa8000040 0xaa000000 0xed17ed0 0xae84cbf5 0xb28fb7b5 0xbb67ae85 0xbe8b7112 
+	0xc0000000 0xc0000040 0xc0000100 0xc0000f80 0xc0001fff 0xdbdc0f7f 0xe0000000 0xe0000001 0xe005003f 0xe6acf082 0xe859631e 0xf0000000 0xf04d766e 0xf0841070 0xf12ddfef 0xf293b606 
+	0xf2c5a1d9 0xf700d000 0xf8000000 0xf8f8f8f8 0xf93d2a54 0xfc000000 0xfe000000 0xfe036dfb 0xfeb00000 0xfeb80000 0xfeb83b80 0xfeb83ba0 0xfed20e00 0xff000000 0xff800000 0xffc00000 
+	0xffc0802a 0xffca5800 0xffca7800 0xffdbb22a 0xffe00000 0xffe21000 0xffe29000 0xffead800 0xfff00000 0xfff101ff 0xfff80000 0xfff9fffe 0xfffaffff 0xfffc0000 0xfffc11fb 0xfffe0000 
+	0xfffeffff 0xffff0000 0xffff0ff0 0xffff2bff 0xffffc000 0xffffe90c 0xffffff00 0xffffffb0 0xffffffc0 0xffffffc8 0xffffffff 0xc 0x20008 0x20800 0x2282b 0x100408 
+	0x3c491c 0x523380 0x20b8000 0x40007fff 0x90810200 0xd600d000 0xf0840070 0xffc21000 0xfff300f8 0xffff0180 0x1fffffff 0xffff57dc 0xffff3efe 0xffffd1f0 0x7dffffff 0xfffff7de 
+	0xffffffff 0xfffff809 0xff7f8050 0xfffff8ff 0xfffffffe 0xffffc800 0xffffe000 0xfffffffb 0xffffffc0 0xffffffc8 0xfffffff9 0xfeb9ffac 0xfed3ff88 0xff03ffc0 0xff83ffe9 0xffd1fff8 
+	0x3ffdfffe 0x3fdbfffc 0xffcbfffa 0xffdbffff 0xbfe30200 0xffe2d003 0xffe6907b 0xffead81c 0xfff300f8 0xffff01ff 0xfffffffd 0xffffdffe 0xfffb0efe 0xffffd1b6 0xffff7dff 0xffff55dd 
+	0x817f41ff 0x817f42e0 0x90830720 0x994b66a2 0x9b076e8c 0x9db3770e 0xa0036dfb 0xa00f6dff 0xa54ff53a 0xa8038003 0xaa03c000 0xab13e80b 0xae87eff5 0xb28ff6b5 0xbb67fc85 0xbe8bfd12 
+	0xc003fe00 0xc003ff40 0xc003ff80 0xc003ffc0 0xc003fffb 0xdbdfffff 0xe003fff0 0xe003fff1 0xe007ffff 0xe6afffff 0xe85d631e 0xf0040001 0xf04d366e 0xf0851370 0xf12d9fef 0xf297b606 
+	0xf2c7b1d9 0xf707d000 0xf8078000 0xf8ffd8f8 0xf93fea54 0xfc07f000 0xfe07f800 0xfe07fdfb 0xfeb7fe00 0xfebfff00 0xfebfff80 0xfebfffe0 0xfed7ffe0 0xff07fff0 0xff87fff8 0xffc80000 
+	0xffc8802b 0xffca580f 0xffca7c00 0xffdb922a 0xffe90100 0xffebd5fd 0xffee9000 0xffeed800 0xfffe88c8 0xffff01ff 0xffff8000 0xffffdefe 0xffffee46 0xfffff000 0xfffff9fb 0xfffffc00 
+	0xffffffff 0xffffff00 0xfffffff0 0xffffffff 0xffffffe0 0xfffffff0 0xfffffff8 0xffffffff 0xffffffc0 0xfffffff8 0xffffffff 0x10001c 0x13040e 0x160800 0x17afff 0x180408 
+	0x3e7b1e 0x5e3380 0x21fcfee 0x401e7fff 0x909f0200 0xd61fd000 0xf09fc070 0xffdff000 0xfffff0f8 0xfffff980 0x1ffffdfd 0xffffffdc 0xfffffffe 0xfffffff0 0x7dffffff 0xfffffffe 
+	0xffffffff 0xffffd000 0xff7e01d1 0xfffffaff 0xffffef54 0xffffcdd5 0xffffcfd5 0xfffffffb 0xffffffd5 0xffffffc8 0xfffffff9 0xfeb83bac 0xfefa0e08 0xff3e0800 0xffbe6dff 0xfffc7fdf 
+	0x3ffdcfff 0x3ffe7b80 0xfffff800 0xffffffff 0xbfff7700 0xffffffd5 0xffff9070 0xffffd800 0xffffe0f8 0xfffff1ff 0xfffffdfd 0xfffffffe 0xfffffefe 0xffffff80 0xffffffff 0xffffffdc
+];
+attach values [imm0_sel3] [
+	0x817f40c0 0x817f40e1 0x90c107e1 0x994866a3 0x9b456acd 0x9df277cf 0xa0400501 0xa04f055f 0xa54ff73b 0xa8410000 0xaa520201 0xab53780b 0xaed6fbf5 0xb2dfb7b5 0xbb7fae85 0xbeeb7112 
+	0xc0600201 0xc0640fe0 0xc0700100 0xc0700f80 0xc0781afb 0xdbfd0fff 0xe07c0000 0xe07dafdf 0xe07f003f 0xe6fff082 0xe87fe31e 0xf07fc000 0xf07fffee 0xf0fff070 0xf17fdfef 0xf2fffe06 
+	0xf2ffa5d9 0xf77fd600 0xf87f8700 0xf8ffdff8 0xf97faaff 0xfc800000 0xfe800002 0xfe836dfb 0xfeb11088 0xfebb0c00 0xfebb3f80 0xfef83ba0 0xfed61e89 0xffda0400 0xffe00000 0xfff00000 
+	0xfff8802a 0xfffe5800 0xfffe7800 0xffff922a 0xffff8000 0xffffd000 0xfffff000 0xfffff800 0xfffff800 0xfffffdff 0xfffffe00 0xfffffffe 0xffffffff 0xfffc0000 0xfffc11fb 0xfffe0000 
+	0xfffeffff 0xffff0000 0xffff0770 0xffff207f 0xffffc000 0xffffc800 0xffffc000 0xffffffb0 0xffffffc0 0xffffffc8 0xfffffff9 0x1fffc0c 0x1fffe08 0x1ffffff 0x2022829 0x3100408 
+	0x33f4b1f 0x35ff380 0x38b8000 0x4388ffff 0x93c10200 0xd7e0d000 0xf3ec01f0 0xfff21000 0xfffb00f8 0xffff0180 0x1ffffdfd 0xffff55dc 0xffffb6fe 0xffffd1f0 0x7fffffff 0xfffff7de 
+	0xffffffff 0xfffffc00 0xff7e0050 0xfffff9ff 0xffffeb76 0xffffcc04 0xffffc607 0xfffffffb 0xffffffc1 0xffffffc9 0xfffffff9 0xfeb83bac 0xfef34f49 0xff020800 0xff822829 0xffd00408 
+	0x3ffcc93e 0x3ffa7b80 0xfffbf800 0xfffff27f 0xbfff0200 0xffffd000 0xffff9070 0xffffd800 0xffffe0f8 0xfffff1ff 0xfffffdfd 0xffffdffe 0xfffb0efe 0xffffdb8b 0xfffe7dff 0xffff55dc 
+	0x8d7f40c0 0x8d7f4eef 0x9e810720 0x9f7d76b2 0x9f05688c 0x9fb2770e 0xafc00000 0xafef001e 0xaffff53a 0xaff80000 0xaffc0000 0xafff680b 0xafffcaf5 0xbfffb6b5 0xbfffec85 0xbffff112 
+	0xcffff000 0xcfffffff 0xd0000100 0xd003fff7 0xd1243afb 0xdbfc2f7f 0xf8000000 0xfc000001 0xfd95453f 0xfeacf082 0xff59631e 0xff800000 0xffcfffef 0xffc41070 0xffed9fef 0xfff3b606 
+	0xfffda1d9 0xfffcd000 0xfffe0000 0xffffd8f8 0xffffaa54 0xffffc000 0xffffe000 0xfe036dfb 0xfebfffff 0xfeb8205f 0xfeb83b80 0xfebc3fa8 0xfed20e00 0xff000000 0xff800000 0xffeef372 
+	0xffc0802a 0xffca5800 0xffdffecb 0xffdb922a 0xffe00000 0xffe21000 0xfff29000 0xfffad800 0xfffc0000 0xffff01ff 0xffff0000 0xffffdefe 0xffffce46 0xfffff000 0xfffc11fb 0xfffe0003 
+	0xfffeffff 0xffff4658 0xffff47f0 0xffff66ff 0xffffce00 0xffffce80 0xffffd06c 0xffffffb0 0xffffffe4 0xffffffd8 0xfffffffd 0x4000514c 0x4002514c 0x41b7bca1 0x41bb69a9 0x41ff0508 
+	0x41ff49ff 0x495bf3e0 0x4b6fee69 0x50007fff 0xd18f527f 0xd649d65f 0xfbe4cd79 0xfff6919e 0xfff300f8 0xffff01e7 0x7ffffdff 0xffff77fc 0xfffff6ff 0xfffff5fe 0x7fffffff 0xfffff7de 
+	0xffffffff 0xffffd000 0xff7e0050 0xfffff8ff 0xffffea54 0xffffc800 0xffffc000 0xfffffffb 0xffffffc0 0xffffffc8 0xfffffff9 0xfffe3bac 0xffff0e08 0xffff8800 0xfffff829 0xfffffc08 
+	0xbffcc93e 0xbfda7b81 0xffcbf80d 0xffdbf27f 0xbfe10233 0xffe2d301 0xffe69571 0xffeade03 0xfff307f8 0xffff07ff 0xffffffff 0xfffffffe 0xfffbfefe 0xffffd1bf 0xffffffff 0xffff75fc
+];
+
+define token _seqword(64)
+	full_seqword = (0, 31)
+	up0        = (0, 1)
+	eflow      = (2, 5)
+		eflow_cmd = (2, 5)
+	up1        = (6, 7)
+	next_uaddr = (8, 22)
+	up2        = (23, 24)
+	sync       = (25, 27)
+		sync_cmd  = (25, 27)
+	unknown2   = (28, 29)
+	seq_pad0   = (30, 31)
+	with_testustate = (32, 32)
+	seqw_with_saveuip_next = (33, 33)
+	seq_pad1    = (34, 39)
+	seq_match_patch = (40, 55)
+	seq_pad2    = (56, 63)
+;
+
+define pcodeop lfencewait;
+define pcodeop lfencemark;
+define pcodeop lfencewaitmark;
+define pcodeop syncfull;
+define pcodeop syncwait;
+define pcodeop syncmark;
+define pcodeop syncwaitmark;
+define pcodeop sync_unknown;
+attach names [sync_cmd] [
+	"UNKNOWN_SYNC" "LFNCEWAIT" "LFNCEMARK" "LFNCEWTMRK" "SYNCFULL" "SYNCWAIT" "SYNCMARK" "SYNCWTMRK"
+];
+define pcodeop eflow_unknown;
+define pcodeop writetag;
+define pcodeop msloop;
+define pcodeop msstop;
+attach names [eflow_cmd] [
+	"UNKNOWN_EFLOW" "UNKNOWN_EFLOW" "SEQW URET0" "SEQW URET1" "SEQW SAVEUIP0" "SEQW SAVEUIP1" "SEQW SAVEUIP0" "SEQW SAVEUIP1"
+	"WRTAGW" "MSLOOP" "UNKNOWN_EFLOW" "MSSTOP" "SEQW UEND0" "SEQW UEND1" "SEQW UEND2" "SEQW UEND3"
+];
+
+# ======= MACROS =======
+macro resultflags(result, ZF, SF, PF) {
+ SF = result s< 0;
+ ZF = result == 0;
+ PF = ((popcount(result & 0xff) & 1:1) == 0);
+ # AF not implemented
+}
+macro addflags(op1, op2, OF, CF) {
+ CF = carry(op1,op2);
+ OF = scarry(op1,op2);
+}
+
+macro subflags(op1, op2, OF, CF) {
+ CF = op1 < op2;
+ OF = sborrow(op1,op2);
+}
+
+macro negflags(op1, OF, CF) {
+ CF = (op1 != 0);
+ OF = sborrow(0,op1);
+}
+
+macro logicalflags(OF, CF) {
+ CF = 0;
+ OF = 0;
+}
+
+macro imulflags(low,total, OF, CF){
+ CF = sext(low) != total;
+ OF = CF;
+}
+
+macro mulflags(highhalf, OF, CF) {
+CF = highhalf != 0;
+OF = CF;
+}
+
+macro rolflags(result, count, OF, CF) {
+
+ local notzero = (count != 0);
+ local newCF = ((result & 1) != 0);
+ CF = (!notzero & CF) | (notzero & newCF);
+
+ local one = (count == 1);
+ local newOF = CF ^ (result s< 0);
+ OF = (!one & OF) | (one & newOF);
+}
+
+macro rorflags(result, count, OF, CF) {
+
+ local notzero = (count != 0);
+ local newCF = (result s< 0);
+ CF = (!notzero & CF) | (notzero & newCF);
+
+ local one = (count == 1);
+ local newOF = (result s< 0) ^ ((result << 1) s< 0);
+ OF = (!one & OF) | (one & newOF);
+}
+macro shiftresultflags(result, count, ZF, SF, PF) {
+
+ local notzero = (count != 0);
+
+ local newSF = (result s< 0);
+ SF = (!notzero & SF) | (notzero & newSF);
+
+ local newZF = (result == 0);
+ ZF = (!notzero & ZF) | (notzero & newZF);
+ 
+ local newPF = ((popcount(result & 0xff) & 1:1) == 0);
+ PF = (!notzero & PF) | (notzero & newPF);
+ # AF not implemented
+}
+macro shlflags(op1,result,count, OF, CF) { # works for shld also
+
+ local notzero = (count != 0);
+ local newCF = ( (op1 << (count - 1)) s< 0 );
+ CF = (!notzero & CF) | (notzero & newCF);
+
+ local one = (count == 1);
+ local newOF = CF ^ (result s< 0);
+ OF = (!one & OF) | (one & newOF);
+}
+
+macro sarflags(op1,result,count, OF, CF) {
+
+ local notzero = (count != 0);
+ local newCF = ( ( (op1 s>> (count - 1)) & 1 ) != 0 );
+ CF = (!notzero & CF) | (notzero & newCF);
+
+ local one = (count == 1);
+ OF = (!one & OF);
+}
+
+macro shrflags(op1,result,count, OF, CF) {
+
+ local notzero = (count != 0);
+ local newCF = ( ( (op1 >> (count - 1)) & 1 ) != 0 );
+ CF = (!notzero & CF) | (notzero & newCF);
+
+ local one = (count == 1);
+ local newOF = (op1 s< 0);
+ OF = (!one & OF) | (one & newOF);
+}
+
+# ======= SEQWORD =======
+
+# Otherwise the pcode for things like saveuip will be wrong (maybe)
+# or sync words pcode will get evaluated after the instruction executed
+seqword_sync: [sync_cmd] is up2=1 & sync_cmd & sync=1 {lfencewait();}
+seqword_sync: [sync_cmd] is up2=1 & sync_cmd & sync=2 {lfencemark();}
+seqword_sync: [sync_cmd] is up2=1 & sync_cmd & sync=3 {lfencewaitmark();}
+seqword_sync: [sync_cmd] is up2=1 & sync_cmd & sync=4 {syncfull();}
+seqword_sync: [sync_cmd] is up2=1 & sync_cmd & sync=5 {syncwait();}
+seqword_sync: [sync_cmd] is up2=1 & sync_cmd & sync=6 {syncmark();}
+seqword_sync: [sync_cmd] is up2=1 & sync_cmd & sync=7 {syncwaitmark();}
+seqword_sync: [sync_cmd] is up2=1 & sync_cmd & sync   {sync_unknown();}
+seqword_sync:"" is up2=0 & sync {}
+
+# UEND: think of a better way to express end
+seqword_eflow:" "^eflow_cmd is up0=1 & (eflow=12 | eflow=13 | eflow=14 |eflow=15) & eflow_cmd { return [0:8];}
+
+seqword_eflow:" SEQW URET0" is up0=1 & eflow=2 { goto [uip0 * $(INSTR_LEN)]; }
+seqword_eflow:" SEQW URET1" is up0=1 & eflow=3 { goto [uip1 * $(INSTR_LEN)]; }
+# SAVEUIP
+seqword_next:next is up0=1 [ next = inst_next; ] {
+  export *[ucode]:8 next;
+}
+seqword_eflow:" SEQW SAVEUIP0" seqword_next is up0=1 & eflow=4 & seqword_next { uip0 = inst_next/$(INSTR_LEN); }
+seqword_eflow:" SEQW SAVEUIP1" seqword_next is up0=1 & eflow=5 & seqword_next { uip1 = inst_next/$(INSTR_LEN); }
+# TODO: what does ROVR do here?
+seqword_eflow:" ROVR<- SEQW SAVEUIP0" seqword_next is up0=1 & eflow=6 & seqword_next{ uip0 = inst_next/$(INSTR_LEN); }
+seqword_eflow:" ROVR<- SEQW SAVEUIP1" seqword_next is up0=1 & eflow=7 & seqword_next { uip1 = inst_next/$(INSTR_LEN); }
+
+seqword_eflow:" "^eflow_cmd is up0=1 & eflow_cmd {eflow_unknown();}
+seqword_eflow:"" is up0=1 & eflow=0 {}
+seqword_eflow:"" is up0=0 & eflow {}
+
+seqword_eflow_pre:[eflow_cmd] is up0=1 & eflow_cmd & eflow=8 {writetag();}
+seqword_eflow_pre:[eflow_cmd] is up0=1 & eflow_cmd & eflow=9 {msloop();}
+seqword_eflow_pre:[eflow_cmd] is up0=1 & eflow_cmd & eflow=11 {msstop();}
+seqword_eflow_pre:"" is up0 & eflow {}
+
+seqword_target: target is next_uaddr [ target = next_uaddr*$(INSTR_LEN); ] {
+  export *[ucode]:8 target;
+}
+seqword_goto:" SEQW GOTO" seqword_target is up1=1 & seqword_target & seqw_with_saveuip_next=0 {
+	goto seqword_target;
+}
+# if the uop or the eflow seqword saves uip_next, this is a call probably
+seqword_goto:" SEQW GOTO" seqword_target is up1=1 & seqword_target & seqw_with_saveuip_next=1 {
+	call seqword_target;
+}
+seqword_goto:"" is up1=0 & next_uaddr {}
+
+###### match & patch
+patch_target: target is seq_match_patch [ target = seq_match_patch*$(INSTR_LEN); ] {
+  export *[ucode]:8 target;
+}
+define pcodeop PATCH_ENABLED;
+match_patch:" PATCH" patch_target is patch_target {
+	if (PATCH_ENABLED() != 0:8) goto patch_target;
+}
+match_patch:"" is patch_target & seq_match_patch=0 {}
+######################
+
+# model the match & patch before the sequence word
+seqword_pre:""^match_patch^seqword_eflow_pre^seqword_sync is match_patch & seqword_eflow_pre & seqword_sync {
+	build seqword_sync;
+	build seqword_eflow_pre;
+}
+seqword_pre:""^match_patch is match_patch & full_seqword=0 {}
+
+seqword_post:""^seqword_eflow^seqword_goto is seqword_eflow & seqword_goto {
+	build seqword_eflow;
+	build seqword_goto;
+}
+seqword_post:"" is full_seqword=0 {}
+
+
+# ======= UOP =======
+# deal with sources or immediates
+source0: src0 is src0 & src0_sel { export src0; }
+source0: imm0_sel0 is m0=0 & imm0_sel0 & imm1_sel=0 & src0_sel = 16 {export *[const]:8 imm0_sel0;}
+source0: imm0_sel1 is m0=0 & imm0_sel1 & imm1_sel=1 & src0_sel = 16 {export *[const]:8 imm0_sel1;}
+source0: imm0_sel2 is m0=0 & imm0_sel2 & imm1_sel=2 & src0_sel = 16 {export *[const]:8 imm0_sel2;}
+source0: imm0_sel3 is m0=0 & imm0_sel3 & imm1_sel=3 & src0_sel = 16 {export *[const]:8 imm0_sel3;}
+source0: immediate is m0=0 & src0_sel = 0 & src0_sel [ immediate = 0; ] { export *[const]:8 immediate; }
+source0: immediate is m0=0 & imm0 & imm1 & (src0_sel = 8 | src0_sel = 9 | src0_sel = 10 | src0_sel = 11 | src0_sel = 12 | src0_sel = 13 | src0_sel = 14 | src0_sel = 15 | src0_sel = 24 | src0_sel = 25 | src0_sel = 26 | src0_sel = 27 | src0_sel = 28 | src0_sel = 29 | src0_sel = 30 | src0_sel = 31) & src0_sel [
+	immediate = 0xffffffffffff0000 * ((src0_sel & 0x10) >> 4) | ((src0_sel & 0x07) << 13) | (imm1 << 8) | imm0;
+] { export *[const]:8 immediate; }
+source0: MOP_alias is m0=1 & MOP_alias & (src0_sel = 0 | src0_sel = 16 | src0_sel = 8 | src0_sel = 9 | src0_sel = 10 | src0_sel = 11 | src0_sel = 12 | src0_sel = 13 | src0_sel = 14 | src0_sel = 15 | src0_sel = 24 | src0_sel = 25 | src0_sel = 26 | src0_sel = 27 | src0_sel = 28 | src0_sel = 29 | src0_sel = 30 | src0_sel = 31) & src0_sel { 
+	export *[alias]:8 MOP_alias;
+}
+source0_noalias: src0 is src0 & src0_sel { export src0; }
+source0_noalias: imm0_sel0 is imm0_sel0 & imm1_sel=0 & src0_sel = 16 {export *[const]:8 imm0_sel0;}
+source0_noalias: imm0_sel1 is imm0_sel1 & imm1_sel=1 & src0_sel = 16 {export *[const]:8 imm0_sel1;}
+source0_noalias: imm0_sel2 is imm0_sel2 & imm1_sel=2 & src0_sel = 16 {export *[const]:8 imm0_sel2;}
+source0_noalias: imm0_sel3 is imm0_sel3 & imm1_sel=3 & src0_sel = 16 {export *[const]:8 imm0_sel3;}
+source0_noalias: immediate is src0_sel = 0 & src0_sel [ immediate = 0; ] { export *[const]:8 immediate; }
+source0_noalias: immediate is imm0 & imm1 & (src0_sel = 8 | src0_sel = 9 | src0_sel = 10 | src0_sel = 11 | src0_sel = 12 | src0_sel = 13 | src0_sel = 14 | src0_sel = 15 | src0_sel = 24 | src0_sel = 25 | src0_sel = 26 | src0_sel = 27 | src0_sel = 28 | src0_sel = 29 | src0_sel = 30 | src0_sel = 31) & src0_sel [
+	immediate = 0xffffffffffff0000 * ((src0_sel & 0x10) >> 4) | ((src0_sel & 0x07) << 13) | (imm1 << 8) | imm0;
+] { export *[const]:8 immediate; }
+
+source0_noimm: src0 is src0 & src0_sel { export src0; }
+source0_noimm: immediate is imm0 & imm1 & (src0_sel = 0 | src0_sel = 0x10 | src0_sel = 8 | src0_sel = 9 | src0_sel = 10 | src0_sel = 11 | src0_sel = 12 | src0_sel = 13 | src0_sel = 14 | src0_sel = 15 | src0_sel = 24 | src0_sel = 25 | src0_sel = 26 | src0_sel = 27 | src0_sel = 28 | src0_sel = 29 | src0_sel = 30 | src0_sel = 31) & src0_sel [
+	immediate = 0;
+] { export *[const]:8 immediate; }
+
+# parse source0 as a target in the ucode
+source0_target_imm: imm0_sel0 is imm0_sel0 & imm1_sel=0 & src0_sel = 16 {local tmp=imm0_sel0*$(INSTR_LEN):8; export *[ucode]:8 tmp;}
+source0_target_imm: imm0_sel1 is imm0_sel1 & imm1_sel=1 & src0_sel = 16 {local tmp=imm0_sel1*$(INSTR_LEN):8; export *[ucode]:8 tmp;}
+source0_target_imm: imm0_sel2 is imm0_sel2 & imm1_sel=2 & src0_sel = 16 {local tmp=imm0_sel2*$(INSTR_LEN):8; export *[ucode]:8 tmp;}
+source0_target_imm: imm0_sel3 is imm0_sel3 & imm1_sel=3 & src0_sel = 16 {local tmp=imm0_sel3*$(INSTR_LEN):8; export *[ucode]:8 tmp;}
+source0_target_imm: immediate is imm0 & imm1 & (src0_sel = 8 | src0_sel = 9 | src0_sel = 10 | src0_sel = 11 | src0_sel = 12 | src0_sel = 13 | src0_sel = 14 | src0_sel = 15 | src0_sel = 24 | src0_sel = 25 | src0_sel = 26 | src0_sel = 27 | src0_sel = 28 | src0_sel = 29 | src0_sel = 30 | src0_sel = 31) & src0_sel [
+	immediate = (0xffffffffffff0000 * ((src0_sel & 0x10) >> 4) | ((src0_sel & 0x07) << 13) | (imm1 << 8) | imm0)*$(INSTR_LEN);
+] { export *[ucode]:8 immediate; }
+
+source1: src1 is src1 & src1_sel { export src1; }
+source1: imm0_sel0 is m0=0 & imm0_sel0 & imm1_sel=0 & src1_sel = 16 {export *[const]:8 imm0_sel0;}
+source1: imm0_sel1 is m0=0 & imm0_sel1 & imm1_sel=1 & src1_sel = 16 {export *[const]:8 imm0_sel1;}
+source1: imm0_sel2 is m0=0 & imm0_sel2 & imm1_sel=2 & src1_sel = 16 {export *[const]:8 imm0_sel2;}
+source1: imm0_sel3 is m0=0 & imm0_sel3 & imm1_sel=3 & src1_sel = 16 {export *[const]:8 imm0_sel3;}
+source1: immediate is m0=0 & src1_sel = 0 & src1_sel [ immediate = 0; ] { export *[const]:8 immediate; }
+source1: immediate is m0=0 & imm0 & imm1 & (src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel [
+	immediate = 0xffffffffffff0000 * ((src1_sel & 0x10) >> 4) | ((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0;
+] { export *[const]:8 immediate; }
+source1: MOP_alias is m0=1 & MOP_alias & (src1_sel = 0 | src1_sel = 16 | src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel {
+	export *[alias]:8 MOP_alias;
+}
+
+source1_noalias: src1 is src1 & src1_sel { export src1; }
+source1_noalias: imm0_sel0 is imm0_sel0 & imm1_sel=0 & src1_sel = 16 {export *[const]:8 imm0_sel0;}
+source1_noalias: imm0_sel1 is imm0_sel1 & imm1_sel=1 & src1_sel = 16 {export *[const]:8 imm0_sel1;}
+source1_noalias: imm0_sel2 is imm0_sel2 & imm1_sel=2 & src1_sel = 16 {export *[const]:8 imm0_sel2;}
+source1_noalias: imm0_sel3 is imm0_sel3 & imm1_sel=3 & src1_sel = 16 {export *[const]:8 imm0_sel3;}
+source1_noalias: immediate is src1_sel = 0 & src1_sel [ immediate = 0; ] { export *[const]:8 immediate; }
+source1_noalias: immediate is imm0 & imm1 & (src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel [
+	immediate = 0xffffffffffff0000 * ((src1_sel & 0x10) >> 4) | ((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0;
+] { export *[const]:8 immediate; }
+
+source1_noimm: src1 is src1 & src1_sel { export src1; }
+source1_noimm: immediate is imm0 & imm1 & (src1_sel = 0 | src1_sel = 0x10 | src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel [
+	immediate = 0;
+] { export *[const]:8 immediate; }
+
+# parse source1 as a target in the ucode
+source1_target_imm: imm0_sel0 is imm0_sel0 & imm1_sel=0 & src1_sel = 16 {local tmp=imm0_sel0*$(INSTR_LEN):8; export *[ucode]:8 tmp;}
+source1_target_imm: imm0_sel1 is imm0_sel1 & imm1_sel=1 & src1_sel = 16 {local tmp=imm0_sel1*$(INSTR_LEN):8; export *[ucode]:8 tmp;}
+source1_target_imm: imm0_sel2 is imm0_sel2 & imm1_sel=2 & src1_sel = 16 {local tmp=imm0_sel2*$(INSTR_LEN):8; export *[ucode]:8 tmp;}
+source1_target_imm: imm0_sel3 is imm0_sel3 & imm1_sel=3 & src1_sel = 16 {local tmp=imm0_sel3*$(INSTR_LEN):8; export *[ucode]:8 tmp;}
+source1_target_imm: immediate is imm0 & imm1 & (src1_sel = 0 | src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel [
+	immediate = (0xffffffffffff0000 * ((src1_sel & 0x10) >> 4) | ((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0)*$(INSTR_LEN);
+] { export *[ucode]:8 immediate; }
+
+single_imm:source0^is is_src0_imm=1 & is_src1_imm & source0 {export source0;}
+single_imm:source1^is is_src1_imm=1 & is_src0_imm & source1 {export source1;}
+single_imm:zero^is is_src0_imm & is_src1_imm & src0_sel=0 & src1_sel=0 [zero = 0;] {export *[const]:8 zero;}
+
+single_source:source0^is src1_sel=0 & source0 {export source0;}
+single_source:source1^is src0_sel=0 & source1 {export source1;}
+single_source:immediate^is src0_sel [ immediate = 0; ] { export *[const]:8 immediate; }
+
+dest: dst <- is dst & dst_sel { export dst; }
+dest: is dst & dst_sel=0 { export dst; }
+
+# some instrucitons use dest as a source
+source2: dst is dst & dst_sel { export dst; }
+source2: immediate is dst & dst_sel=0 [ immediate = 0; ] { export *[const]:8 immediate; }
+
+msloopctr: msloopctr_addr is MOP_alias [ msloopctr_addr = 0x08; ] { 
+	export *[alias]:8 msloopctr_addr;
+}
+
+# FLAGS CONDITION CODES
+# NOTICE: UJMPCC_DIRECT_TAKEN_CONDZ is the only one that does not respect the reverse-engineered cc pattern, no idea why
+cc:"o"^is  cond_0=0 & cond_1=1 & cond_2=0 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { export src0_OF; }
+cc:"no"^is cond_0=1 & cond_1=1 & cond_2=0 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = !src0_OF; export tmp; }
+cc:"b"^is  cond_0=2 & cond_1=1 & cond_2=0 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { export src0_CF; }
+cc:"ae"^is cond_0=3 & cond_1=1 & cond_2=0 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = !src0_CF; export tmp; }
+cc:"z"^is  cond_0=0 & cond_1=1 & cond_2=1 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { export src0_ZF; }
+cc:"nz"^is cond_0=1 & cond_1=1 & cond_2=1 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = !src0_ZF; export tmp; }
+cc:"be"^is cond_0=2 & cond_1=1 & cond_2=1 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = src0_CF || src0_ZF; export tmp; }
+cc:"a"^is  cond_0=3 & cond_1=1 & cond_2=1 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = !(src0_CF || src0_ZF); export tmp; }
+cc:"d"^is  cond_0=1 & cond_1=0 & cond_2=1 {export DF;}
+cc:"s"^is  cond_0=0 & cond_1=1 & cond_2=2 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { export src0_SF; }
+cc:"ns"^is cond_0=1 & cond_1=1 & cond_2=2 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = !src0_SF; export tmp; }
+cc:"p"^is  cond_0=2 & cond_1=1 & cond_2=2 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { export src0_PF; }
+cc:"np"^is cond_0=3 & cond_1=1 & cond_2=2 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = !src0_PF; export tmp; }
+cc:"l"^is  cond_0=0 & cond_1=1 & cond_2=3 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = src0_OF != src0_SF; export tmp; }
+cc:"ge"^is cond_0=1 & cond_1=1 & cond_2=3 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = src0_OF == src0_SF; export tmp; }
+cc:"le"^is cond_0=2 & cond_1=1 & cond_2=3 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = src0_ZF || (src0_OF != src0_SF); export tmp; }
+cc:"g"^is  cond_0=3 & cond_1=1 & cond_2=3 & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF { local tmp = !src0_ZF && (src0_OF == src0_SF); export tmp; }
+
+define pcodeop unknown;
+:UNKNOWN opcode: dest source0, source1 seqword_pre^seqword_post is opcode & dest & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = unknown(opcode:8, source0, source1);
+	build seqword_post;
+}
+
+# instructions TODO: fix semantics, rflags, and different sizes
+:nop seqword_pre^seqword_post is full_uop=0; seqword_pre & seqword_post {
+	build seqword_pre; 
+	build seqword_post;
+}
+
+# operands are read once to avoid double fetches on volatile values
+:add^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x000 | opcode = 0x040 | opcode = 0x080 | opcode = 0x0c0) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=0; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:4;
+	local s1 = source1:4;
+	addflags(s0, s1, dst_OF, dst_CF);
+	local d = (s0 + s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+# operands are read once to avoid double fetches on volatile values
+:add^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x000 | opcode = 0x040 | opcode = 0x080 | opcode = 0x0c0) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0;
+	local s1 = source1;
+	addflags(s0, s1, dst_OF, dst_CF);
+	local d = (s0 + s1);
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+# operands are read once to avoid double fetches on volatile values
+:add^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x000 | opcode = 0x040 | opcode = 0x080 | opcode = 0x0c0) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=2; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:2;
+	local s1 = source1:2;
+	addflags(s0, s1, dst_OF, dst_CF);
+	local d = (s0 + s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+# operands are read once to avoid double fetches on volatile values
+:add^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x000 | opcode = 0x040 | opcode = 0x080 | opcode = 0x0c0) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=3; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:1;
+	local s1 = source1:1;
+	addflags(s0, s1, dst_OF, dst_CF);
+	local d = (s0 + s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+# operands are read once to avoid double fetches on volatile values
+:adc^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x33e | opcode = 0x37e | opcode = 0x3be | opcode = 0x3fe) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=0; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:4;
+	local s1 = source1:4;
+	addflags(s0, s1, dst_OF, dst_CF);
+	local d = (s0 + s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+# operands are read once to avoid double fetches on volatile values
+:adc^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x33e | opcode = 0x37e | opcode = 0x3be | opcode = 0x3fe) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0;
+	local s1 = source1;
+	addflags(s0, s1, dst_OF, dst_CF);
+	local d = (s0 + s1);
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+# operands are read once to avoid double fetches on volatile values
+:adc^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x33e | opcode = 0x37e | opcode = 0x3be | opcode = 0x3fe) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=2; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:2;
+	local s1 = source1:2;
+	addflags(s0, s1, dst_OF, dst_CF);
+	local d = (s0 + s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+# operands are read once to avoid double fetches on volatile values
+:adc^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x33e | opcode = 0x37e | opcode = 0x3be | opcode = 0x3fe) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=3; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:1;
+	local s1 = source1:1;
+	addflags(s0, s1, dst_OF, dst_CF);
+	local d = (s0 + s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:or^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x001 | opcode = 0x041 | opcode = 0x081 | opcode = 0x0c1) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	logicalflags(dst_OF, dst_CF);
+	local d = source0 | source1;
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:and^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x004 | opcode = 0x044 | opcode = 0x084 | opcode = 0x0c4) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	logicalflags(dst_OF, dst_CF);
+	local d = source0 & source1;
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:sub^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x005 | opcode = 0x045 | opcode = 0x085 | opcode = 0x0c5) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=0; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:4;
+	local s1 = source1:4;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s1 - s0);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:sub^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x005 | opcode = 0x045 | opcode = 0x085 | opcode = 0x0c5) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0;
+	local s1 = source1;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s1 - s0);
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:sub^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x005 | opcode = 0x045 | opcode = 0x085 | opcode = 0x0c5) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=2; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:2;
+	local s1 = source1:2;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s1 - s0);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:sub^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x005 | opcode = 0x045 | opcode = 0x085 | opcode = 0x0c5) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=3; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:1;
+	local s1 = source1:1;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s1 - s0);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:subr^"_64" dest source0, source1 seqword_pre^seqword_post is opcode = 0x160 & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0;
+	local s1 = source1;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s0 - s1);
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	if (d s< 0) goto <skip>;
+	build seqword_post;
+<skip>
+}
+
+:subr^"_32" dest source0, source1 seqword_pre^seqword_post is opcode = 0x120 & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:4;
+	local s1 = source1:4;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s0 - s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	if (d s< 0) goto <skip>;
+	build seqword_post;
+<skip>
+}
+
+:subr^"_16" dest source0, source1 seqword_pre^seqword_post is opcode = 0x1a0 & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:2;
+	local s1 = source1:2;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s0 - s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	if (d s< 0) goto <skip>;
+	build seqword_post;
+<skip>
+}
+
+:subr^"_8" dest source0, source1 seqword_pre^seqword_post is opcode = 0x1e0 & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:1;
+	
+	local s1 = source1:1;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s0 - s1);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	if (d s< 0) goto <skip>;
+	build seqword_post;
+<skip>
+}
+
+:subb^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x33f | opcode = 0x37f | opcode = 0x3bf | opcode = 0x3ff) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=0; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:4;
+	local s1 = source1:4;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s1 - s0);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:subb^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x33f | opcode = 0x37f | opcode = 0x3bf | opcode = 0x3ff) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0;
+	local s1 = source1;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s1 - s0);
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:subb^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x33f | opcode = 0x37f | opcode = 0x3bf | opcode = 0x3ff) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=2; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:2;
+	local s1 = source1:2;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s1 - s0);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:subb^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x33f | opcode = 0x37f | opcode = 0x3bf | opcode = 0x3ff) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_sel=3; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0 = source0:1;
+	local s1 = source1:1;
+	subflags(s1, s0, dst_OF, dst_CF);
+	local d = (s1 - s0);
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:imul^"_64" dest source0, source1 seqword_pre^seqword_post is opcode=0x264 & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local d = source0 * source1;
+	dest = d;
+	imulflags(d:4, d, dst_OF, dst_CF);
+	build seqword_post;
+}
+
+:xor^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x006 | opcode = 0x046 | opcode = 0x086 | opcode = 0x0c6) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	logicalflags(dst_OF, dst_CF);
+	local d = source0 ^ source1;
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:shl^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x024 | opcode = 0x064 | opcode = 0x0a4 | opcode = 0x0e4) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local tmp = source0;
+	local d = tmp << cnt;
+	dest = d;
+	shlflags(tmp, d, cnt, dst_OF, dst_CF);
+	shiftresultflags(d, cnt, dst_ZF, dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:shr^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x025 | opcode = 0x065 | opcode = 0x0a5 | opcode = 0x0e5) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local tmp = source0;
+	local d = tmp >> cnt;
+	dest = d;
+	shrflags(tmp, d, cnt, dst_OF, dst_CF);
+	shiftresultflags(d, cnt, dst_ZF, dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:sar^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x02e | opcode = 0x06e | opcode = 0x0ae | opcode = 0x0ee) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local tmp = source0;
+	local d = tmp s>> cnt;
+	dest = d;
+	sarflags(tmp, d, cnt, dst_OF, dst_CF);
+	shiftresultflags(d, cnt, dst_ZF, dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:rol^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x02c | opcode = 0x06c | opcode = 0x0ac | opcode = 0x0ec) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_val; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local s0 = source0;
+	local d = (s0 << cnt) | (s0 >> (dst_size_val - cnt));
+	dest = d;
+	rolflags(d, cnt, dst_OF, dst_CF);
+	build seqword_post;
+}
+
+:ror^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x02d | opcode = 0x06d | opcode = 0x0ad | opcode = 0x0ed) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_val; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local s0 = source0;
+	local d = (s0 >> cnt) | (s0 << (dst_size_val - cnt));
+	dest = d;
+	rolflags(d, cnt, dst_OF, dst_CF);
+	build seqword_post;
+}
+
+:notand^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x007 | opcode = 0x047 | opcode = 0x087 | opcode = 0x0c7) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	logicalflags(dst_OF, dst_CF);
+	local d = ~source0 & source1;
+	dest = d;
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+define pcodeop concat;
+:concat^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x021 | opcode = 0x0a1 | opcode = 0x0e1) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_val & dst_size_sel=0; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0:8 = zext(source0:4);
+	local s1:8 = zext(source1:4);
+	local d = (s0 << dst_size_val) | s1;
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:concat^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x021 | opcode = 0x0a1 | opcode = 0x0e1) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_val & dst_size_sel=2; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0:8 = zext(source0:2);
+	local s1:8 = zext(source1:2);
+	local d = (s0 << dst_size_val) | s1;
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:concat^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x021 | opcode = 0x0a1 | opcode = 0x0e1) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size & dst_size_val & dst_size_sel=3; seqword_pre & seqword_post {
+	build seqword_pre;
+	local s0:8 = zext(source0:1);
+	local s1:8 = zext(source1:1);
+	local d = (s0 << dst_size_val) | s1;
+	dest = zext(d);
+	resultflags(d, dst_ZF,dst_SF, dst_PF);
+	build seqword_post;
+}
+
+:zeroext^"_"^dst_size dest source0 seqword_pre^seqword_post is (opcode = 0x008 | opcode = 0x048) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & source0 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	dummy_F = 0;
+	dest = source0;
+	dst_OF = src0_OF;
+	dst_CF = src0_CF;
+	dst_ZF = src0_ZF;
+	dst_SF = src0_SF;
+	dst_PF = src0_PF;
+	build seqword_post;
+}
+
+:zeroext^"_"^dst_size dest source0 seqword_pre^seqword_post is (opcode = 0x088 | opcode = 0x0c8) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & source0 & dst_size & src1_sel=0; seqword_pre & seqword_post {
+	build seqword_pre;
+	dummy_F = 0;
+	dest = source0;
+	dst_OF = src0_OF;
+	dst_CF = src0_CF;
+	dst_ZF = src0_ZF;
+	dst_SF = src0_SF;
+	dst_PF = src0_PF;
+	build seqword_post;
+}
+
+:zeroext^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is opcode = 0x0c8 & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	dummy_F = 0;
+	dest = source0 | (source1 & 0xffffffffffffff00:8);
+	dst_OF = src0_OF;
+	dst_CF = src0_CF;
+	dst_ZF = src0_ZF;
+	dst_SF = src0_SF;
+	dst_PF = src0_PF;
+	build seqword_post;
+}
+
+:zeroext^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is opcode = 0x088 & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	dummy_F = 0;
+	dest = source0 | (source1 & 0xffffffffffff0000:8);
+	dst_OF = src0_OF;
+	dst_CF = src0_CF;
+	dst_ZF = src0_ZF;
+	dst_SF = src0_SF;
+	dst_PF = src0_PF;
+	build seqword_post;
+}
+
+:mov^"_"^dst_size dest source0 seqword_pre^seqword_post is (opcode = 0x009 | opcode = 0x049) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & source0 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	dummy_F = 0;
+	dest = source0;
+	dst_OF = src0_OF;
+	dst_CF = src0_CF;
+	dst_ZF = src0_ZF;
+	dst_SF = src0_SF;
+	dst_PF = src0_PF;
+	build seqword_post;
+}
+
+:movsdq dest source0 seqword_pre^seqword_post is (opcode = 0x02a) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & source0 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	dummy_F = 0;
+	local src = source0:4;
+	dest = sext(src);
+	dst_OF = src0_OF;
+	dst_CF = src0_CF;
+	dst_ZF = src0_ZF;
+	dst_SF = src0_SF;
+	dst_PF = src0_PF;
+	build seqword_post;
+}
+
+#TODO: should bts/btr/btc opperation clear the source0 or dest bit?
+:bt^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is  (opcode = 0x014 | opcode = 0x054 | opcode = 0x094) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local cf = (source0 >> cnt) & 1;
+	dst_CF = cf:1;
+	build seqword_post;
+}
+:bts^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x015 | opcode = 0x055 | opcode = 0x095) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local s0 = source0;
+	local cf = (s0 >> cnt) & 1;
+	dst_CF = cf:1;
+	dest = s0 | (1:8 << cnt);
+	build seqword_post;
+}
+:btr^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x016 | opcode = 0x056 | opcode = 0x096) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local s0 = source0;
+	local cf = (s0 >> cnt) & 1;
+	dst_CF = cf:1;
+	dest = s0 & ~(1:8 << cnt);
+	build seqword_post;
+}
+:btc^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x017 | opcode = 0x057 | opcode = 0x097) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: mask for cnt should be based on bitsize
+	local cnt = source1 & 0x3f;
+	local s0 = source0;
+	local cf = (s0 >> cnt) & 1;
+	dst_CF = cf:1;
+	dest = s0 ^ (1:8 << cnt);
+	build seqword_post;
+}
+
+:sel^cc^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x030 | opcode = 0x031 | opcode = 0x032 | opcode = 0x033 | opcode = 0x070 | opcode = 0x071 | opcode = 0x072 | opcode = 0x073 | opcode = 0x130 | opcode = 0x131 | opcode = 0x132 | opcode = 0x133 | opcode = 0x170 | opcode = 0x171 | opcode = 0x172 | opcode = 0x173 | opcode = 0x230 | opcode = 0x231 | opcode = 0x232 | opcode = 0x233 | opcode = 0x270 | opcode = 0x271 | opcode = 0x272 | opcode = 0x273 | opcode = 0x330 | opcode = 0x331 | opcode = 0x332 | opcode = 0x333 | opcode = 0x370 | opcode = 0x371 | opcode = 0x372 | opcode = 0x373) & dest & cc & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	local res = 0:8;
+	if (cc) goto <done>;
+	res = source1;
+	<done>
+	dest = res;
+	build seqword_post;
+}
+
+:cmov^cc^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode=0x034 | opcode=0x035 | opcode=0x036 | opcode=0x037 | opcode=0x074 | opcode=0x075 | opcode=0x076 | opcode=0x077 | opcode=0x0b4 | opcode=0x0b5 | opcode=0x0b6 | opcode=0x0b7 | opcode=0x0f4 | opcode=0x0f5 | opcode=0x0f6 | opcode=0x0f7 | opcode=0x134 | opcode=0x135 | opcode=0x136 | opcode=0x137 | opcode=0x174 | opcode=0x175 | opcode=0x176 | opcode=0x177 | opcode=0x1b4 | opcode=0x1b5 | opcode=0x1b6 | opcode=0x1b7 | opcode=0x1f4 | opcode=0x1f5 | opcode=0x1f6 | opcode=0x1f7 | opcode=0x234 | opcode=0x235 | opcode=0x236 | opcode=0x237 | opcode=0x274 | opcode=0x275 | opcode=0x276 | opcode=0x277 | opcode=0x2b4 | opcode=0x2b5 | opcode=0x2b6 | opcode=0x2b7 | opcode=0x2f4 | opcode=0x2f5 | opcode=0x2f6 | opcode=0x2f7 | opcode=0x334 | opcode=0x335 | opcode=0x336 | opcode=0x337 | opcode=0x374 | opcode=0x375 | opcode=0x376 | opcode=0x377 | opcode=0x3b4 | opcode=0x3b5 | opcode=0x3b6 | opcode=0x3b7 | opcode=0x3f4 | opcode=0x3f5 | opcode=0x3f6 | opcode=0x3f7) & dest & cc & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	local res = source1;
+	if (!cc) goto <done>;
+	res = source0;
+	<done>
+	dest = res;
+	build seqword_post;
+}
+
+define pcodeop setoflag;
+define pcodeop setcflag;
+define pcodeop setzflag;
+define pcodeop setsflag;
+define pcodeop setpflag;
+define pcodeop readaflags;
+# move and merge flags
+# TODO: check guessed semantics somehow
+# guessed semantics: source0 seem often either an immediate, or come value that has no particular flag value, while source1 is always tied to some flags
+# so guess: move source0 to dest, while copying source1 flags
+:mvmflgs^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x13e | opcode = 0x17e) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & src1_OF & src1_CF & src1_ZF & src1_SF & src1_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	# immediates get mapped to dummy flag
+	dummy_F = 0;
+	dest = source0;
+	dst_OF = src1_OF;
+	dst_CF = src1_CF;
+	dst_ZF = src1_ZF;
+	dst_SF = src1_SF;
+	dst_PF = src1_PF;
+	build seqword_post;
+}
+# move and insert flags
+# TODO: check guessed semantics somehow
+# hard to tell if flags are taken from source0 or 1, but in rdmsr_xlat we have:
+# `tmp8:= MOVEINSERTFLGS_DSZ64(0x00000031, rcx)`, for which I assume rcx cannot contain any user set flags
+:mviflgs^"_"^dst_size dest source0, source1 seqword_pre^seqword_post is (opcode = 0x3d | opcode = 0x7d) & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & src1_OF & src1_CF & src1_ZF & src1_SF & src1_PF & source0 & source1 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = source1;
+	local tmp = source0;
+	local cf = tmp & 1;
+	dst_CF = cf:1;
+	local pf = (tmp >> 1) & 1;
+	dst_PF = pf:1;
+	local zf = (tmp >> 3) & 1;
+	dst_ZF = zf:1;
+	local sf = (tmp >> 4) & 1;
+	dst_SF = sf:1;
+	local of = (tmp >> 5) & 1;
+	dst_OF = of:1;
+	build seqword_post;
+}
+:genflgs source0, source1 seqword_pre^seqword_post is opcode = 0x37d & src0_OF & src0_CF & src0_ZF & src0_SF & src0_PF & src1_OF & src1_CF & src1_ZF & src1_SF & src1_PF & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	# immediates get mapped to dummy flag
+	# TODO: understand immediates meaning in merge flags
+	dummy_F = 0;
+	OF = src0_OF| src1_OF;
+	CF = src0_CF| src1_CF;
+	ZF = src0_ZF| src1_ZF;
+	SF = src0_SF| src1_SF;
+	PF = src0_PF| src1_PF;
+	build seqword_post;
+}
+
+# it transforms the internal flags representation into the EFLAGS representation for the source register
+:readflgs dest single_source seqword_pre^seqword_post is opcode = 0x380 & dest & single_source; seqword_pre & seqword_post {
+	build seqword_pre;
+	# TODO: understand what does it actually read
+	dest = readaflags(single_source);
+	build seqword_post;
+}
+
+:clc dst_CF seqword_pre^seqword_post is opcode = 0x338 & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF; seqword_pre & seqword_post {
+	build seqword_pre;
+	dummy_F = 0;
+	dst_CF = 0;
+	build seqword_post;
+}
+
+:stc dst_CF seqword_pre^seqword_post is opcode = 0x33a & dest & dst_OF & dst_CF & dst_ZF & dst_SF & dst_PF; seqword_pre & seqword_post {
+	build seqword_pre;
+	dummy_F = 0;
+	dst_CF = 1;
+	build seqword_post;
+}
+
+# cannot cast/reuse source0/1 since for the immediate we have to &0x1ff, and the disasm view does not support operations on subtables
+source0_uram: src0 is src0 & src0_sel { local uram_addr = src0 & 0x1ff; export *[uram]:8 uram_addr; }
+source0_uram: uram_addr is imm0_sel0 & imm1_sel=0 & src0_sel = 16 [uram_addr = imm0_sel0 & 0x1ff;] {export *[uram]:8 imm0_sel0;}
+source0_uram: uram_addr is imm0_sel1 & imm1_sel=1 & src0_sel = 16 [uram_addr = imm0_sel1 & 0x1ff;] {export *[uram]:8 imm0_sel1;}
+source0_uram: uram_addr is imm0_sel2 & imm1_sel=2 & src0_sel = 16 [uram_addr = imm0_sel2 & 0x1ff;] {export *[uram]:8 imm0_sel2;}
+source0_uram: uram_addr is imm0_sel3 & imm1_sel=3 & src0_sel = 16 [uram_addr = imm0_sel3 & 0x1ff;] {export *[uram]:8 imm0_sel3;}
+source0_uram: immediate is imm0 & imm1 & (src0_sel = 8 | src0_sel = 9 | src0_sel = 10 | src0_sel = 11 | src0_sel = 12 | src0_sel = 13 | src0_sel = 14 | src0_sel = 15 | src0_sel = 24 | src0_sel = 25 | src0_sel = 26 | src0_sel = 27 | src0_sel = 28 | src0_sel = 29 | src0_sel = 30 | src0_sel = 31) & src0_sel [
+	immediate = (0xffffffffffff0000 * ((src0_sel & 0x10) >> 4) | ((src0_sel & 0x07) << 13) | (imm1 << 8) | imm0) & 0x1ff;
+] { export *[uram]:8 immediate; }
+source1_uram: src1 is src1 & src1_sel { local uram_addr = src1 & 0x1ff; export *[uram]:8 uram_addr; }
+source1_uram: uram_addr is imm0_sel0 & imm1_sel=0 & src1_sel = 16 [uram_addr = imm0_sel0 & 0x1ff;] {export *[uram]:8 imm0_sel0;}
+source1_uram: uram_addr is imm0_sel1 & imm1_sel=1 & src1_sel = 16 [uram_addr = imm0_sel1 & 0x1ff;] {export *[uram]:8 imm0_sel1;}
+source1_uram: uram_addr is imm0_sel2 & imm1_sel=2 & src1_sel = 16 [uram_addr = imm0_sel2 & 0x1ff;] {export *[uram]:8 imm0_sel2;}
+source1_uram: uram_addr is imm0_sel3 & imm1_sel=3 & src1_sel = 16 [uram_addr = imm0_sel3 & 0x1ff;] {export *[uram]:8 imm0_sel3;}
+source1_uram: immediate is imm0 & imm1 & (src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel [
+	immediate = (0xffffffffffff0000 * ((src1_sel & 0x10) >> 4) | ((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0) & 0x1ff;
+] { export *[uram]:8 immediate; }
+single_uram_source:source0_uram^is src1_sel=0 & source0_uram {export source0_uram;}
+single_uram_source:source1_uram^is src0_sel=0 & source1_uram {export source1_uram;}
+:ruram dest single_uram_source seqword_pre^seqword_post is opcode = 0x063 & dest & single_uram_source; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = single_uram_source;
+	build seqword_post;
+}
+# TODO: some writeuram uops have also dest, wtf
+:wuram source0, source1_uram seqword_pre^seqword_post is opcode = 0x043 & dest & source0 & source1_uram; seqword_pre & seqword_post {
+	build seqword_pre;
+	source1_uram = source0;
+	build seqword_post;
+}
+
+# crbs operations
+# cannot cast/reuse source0/1 since for the immediate we have to &0x7ff, and the disasm view does not support operations on subtables
+source0_crbus: src0 is src0 & src0_sel { local crbus_addr = src0 & 0x7ff; export *[crbus]:8 crbus_addr; }
+source0_crbus: crbus_addr is imm0_sel0 & imm1_sel=0 & src0_sel = 16 [crbus_addr = imm0_sel0 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+source0_crbus: crbus_addr is imm0_sel1 & imm1_sel=1 & src0_sel = 16 [crbus_addr = imm0_sel1 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+source0_crbus: crbus_addr is imm0_sel2 & imm1_sel=2 & src0_sel = 16 [crbus_addr = imm0_sel2 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+source0_crbus: crbus_addr is imm0_sel3 & imm1_sel=3 & src0_sel = 16 [crbus_addr = imm0_sel3 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+source0_crbus: immediate is src0_sel = 0 & src0_sel [ immediate = 0; ] { export *[crbus]:8 immediate; }
+source0_crbus: immediate is imm0 & imm1 & (src0_sel = 8 | src0_sel = 9 | src0_sel = 10 | src0_sel = 11 | src0_sel = 12 | src0_sel = 13 | src0_sel = 14 | src0_sel = 15 | src0_sel = 24 | src0_sel = 25 | src0_sel = 26 | src0_sel = 27 | src0_sel = 28 | src0_sel = 29 | src0_sel = 30 | src0_sel = 31) & src0_sel [
+	immediate = (((src0_sel & 0x07) << 13) | (imm1 << 8) | imm0) & 0x7ff;
+] { export *[crbus]:8 immediate; }
+source1_crbus: src1 is src1 & src1_sel { local crbus_addr = src1 & 0x7ff; export *[crbus]:8 crbus_addr; }
+source1_crbus: crbus_addr is imm0_sel0 & imm1_sel=0 & src1_sel = 16 [crbus_addr = imm0_sel0 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+source1_crbus: crbus_addr is imm0_sel1 & imm1_sel=1 & src1_sel = 16 [crbus_addr = imm0_sel1 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+source1_crbus: crbus_addr is imm0_sel2 & imm1_sel=2 & src1_sel = 16 [crbus_addr = imm0_sel2 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+source1_crbus: crbus_addr is imm0_sel3 & imm1_sel=3 & src1_sel = 16 [crbus_addr = imm0_sel3 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+source1_crbus: immediate is src1_sel = 0 & src1_sel [ immediate = 0; ] { export *[crbus]:8 immediate; }
+source1_crbus: immediate is imm0 & imm1 & (src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel [
+	immediate = (((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0) & 0x7ff;
+] { export *[crbus]:8 immediate; }
+single_crbus_source:source0_crbus^is src1_sel=0 & source0_crbus {export source0_crbus;}
+single_crbus_source:source1_crbus^is src0_sel=0 & source1_crbus {export source1_crbus;}
+# TODO: if both valid, choose src1, is it correct?
+single_crbus_source:source1_crbus^is source1_crbus {export source1_crbus;}
+
+source1_cregop: immediate is imm0 & imm1 & m0 & (src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel [
+	immediate = (((src1_sel & 0x10) << 1) | ((src1_sel & 0x07) << 2) | (imm1 >> 4) | (m0 << 1));
+] { export *[const]:8 immediate; }
+source1_cregop: src1 is src1 & src1_sel { export src1; }
+
+dest_crop: crbus_addr is imm0_sel0 & imm1_sel=0 & src1_sel = 16 [crbus_addr = imm0_sel0 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+dest_crop: crbus_addr is imm0_sel1 & imm1_sel=1 & src1_sel = 16 [crbus_addr = imm0_sel1 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+dest_crop: crbus_addr is imm0_sel2 & imm1_sel=2 & src1_sel = 16 [crbus_addr = imm0_sel2 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+dest_crop: crbus_addr is imm0_sel3 & imm1_sel=3 & src1_sel = 16 [crbus_addr = imm0_sel3 & 0x7ff;] {export *[crbus]:8 crbus_addr;}
+dest_crop: immediate is imm0 & imm1 & src1_sel [
+	immediate = (((imm1 & 0x7) << 8) | imm0) & 0x7ff;
+] { export *[crbus]:8 immediate; }
+
+:rcreg dest single_crbus_source seqword_pre^seqword_post is opcode = 0x062 & dest & single_crbus_source; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = single_crbus_source;
+	build seqword_post;
+}
+# TODO: some writeuram uops have also dest, wtf
+:wcreg source0, source1_crbus seqword_pre^seqword_post is opcode = 0x042 & dest & source0 & source1_crbus; seqword_pre & seqword_post {
+	build seqword_pre;
+	source1_crbus = source0;
+	build seqword_post;
+}
+:andcreg source0_noalias, source1_cregop, dest_crop seqword_pre^seqword_post is opcode = 0x822 & dest & source0_noalias & source1_cregop & dest_crop; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest_crop = source0_noalias & source1_cregop;
+	build seqword_post;
+}
+:shlcreg source0_noalias, source1_cregop, dest_crop seqword_pre^seqword_post is opcode = 0x8a2 & dest & source0_noalias & source1_cregop & dest_crop; seqword_pre & seqword_post {
+	build seqword_pre;
+	local cnt = source1_cregop & 0x3f;
+	dest_crop = source0_noalias << cnt;
+	build seqword_post;
+}
+:shrcreg source0_noalias, source1_cregop, dest_crop seqword_pre^seqword_post is opcode = 0x9a2 & dest & source0_noalias & source1_cregop & dest_crop; seqword_pre & seqword_post {
+	build seqword_pre;
+	local cnt = source1_cregop & 0x3f;
+	dest_crop = source0_noalias >> cnt;
+	build seqword_post;
+}
+:orcreg source0_noalias, source1_cregop, dest_crop seqword_pre^seqword_post is opcode = 0x902 & dest & source0_noalias & source1_cregop & dest_crop; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest_crop = source0_noalias | source1_cregop;
+	build seqword_post;
+}
+# TODO: where does the tested bit info go? Or it is just a bit set/reset?
+:btscreg source0_noalias, source1_cregop, dest_crop seqword_pre^seqword_post is opcode = 0x962 & dest & source0_noalias & source1_cregop & dest_crop; seqword_pre & seqword_post {
+	build seqword_pre;
+	local cnt = source1_cregop & 0x3f;
+#	local cf = (source0_noalias >> cnt) & 1;
+	dest_crop = source0_noalias | (1:8 << cnt);
+	build seqword_post;
+}
+:btrcreg source0_noalias, source1_cregop, dest_crop seqword_pre^seqword_post is opcode = 0xa62 & dest & source0_noalias & source1_cregop & dest_crop; seqword_pre & seqword_post {
+	build seqword_pre;
+	local cnt = source1_cregop & 0x3f;
+#	local cf = (source0_noalias >> cnt) & 1;
+	dest_crop = source0_noalias & ~(1:8 << cnt);
+	build seqword_post;
+}
+
+# opaque operations
+define pcodeop msr2cr;
+:msr2cr dest single_source seqword_pre^seqword_post is opcode = 0x228 & dest & single_source; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = msr2cr(single_source);
+	build seqword_post;
+}
+define pcodeop rdvmcspla;
+:rdvmcspla dest single_source seqword_pre^seqword_post is opcode = 0x269 & dest & single_source; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = rdvmcspla(single_source);
+	build seqword_post;
+}
+
+
+# direct conditional jump
+:ujmp^cc source0, source1_target_imm seqword_pre^seqword_post is (is_src1_imm=1 | (src1_sel=0 & is_src1_imm=0)) & (opcode=0x050 | opcode=0x051 | opcode=0x052 | opcode=0x053 | opcode=0x150 | opcode=0x151 | opcode=0x152 | opcode=0x153 | opcode=0x250 | opcode=0x251 | opcode=0x252 | opcode=0x253 | opcode=0x350 | opcode=0x351 | opcode=0x352 | opcode=0x353) & cc & source0 & source1_target_imm; seqword_pre & seqword_post {
+	build seqword_pre;
+	if (cc) goto source1_target_imm;
+	build seqword_post;
+}
+# indirect jump
+:ujmp^cc source0, source1 seqword_pre^seqword_post is is_src1_imm=0 & (opcode=0x050 | opcode=0x051 | opcode=0x052 | opcode=0x053 | opcode=0x150 | opcode=0x151 | opcode=0x152 | opcode=0x153 | opcode=0x250 | opcode=0x251 | opcode=0x252 | opcode=0x253 | opcode=0x350 | opcode=0x351 | opcode=0x352 | opcode=0x353) & cc & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local target = source1 * $(INSTR_LEN);
+	if (!cc) goto <nojump>;
+	goto [target];
+	<nojump>
+	build seqword_post;
+}
+# UJMPCC_DIRECT_TAKEN_CONDZ
+:ujmpz_t source0, source1_target_imm seqword_pre^seqword_post is (is_src1_imm=1 | (src1_sel=0 & is_src1_imm=0)) & opcode=0x15f & source0 & source1_target_imm & src0_ZF; seqword_pre & seqword_post {
+	build seqword_pre;
+	if (src0_ZF) goto source1_target_imm;
+	build seqword_post;
+}
+# indirect jump
+:ujmpz_t source0, source1 seqword_pre^seqword_post is is_src1_imm=0 & opcode=0x15f & source0 & source1 & src0_ZF; seqword_pre & seqword_post {
+	build seqword_pre;
+	local target = source1 * $(INSTR_LEN);
+	if (!src0_ZF) goto <nojump>;
+	goto [target];
+	<nojump>
+	build seqword_post;
+}
+#ujmp
+:ujmp source1_target_imm seqword_pre^seqword_post is uop_with_saveuip_next=0 & (is_src1_imm=1 | (src1_sel=0 & is_src1_imm=0)) & opcode=0x15d & source1_target_imm; seqword_pre & seqword_post {
+	build seqword_pre;
+	goto source1_target_imm;
+	build seqword_post;
+}
+# indirect ujmp
+:ujmp source1 seqword_pre^seqword_post is uop_with_saveuip_next=0 & is_src1_imm=0 & opcode=0x15d & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local target = source1 * $(INSTR_LEN);
+	goto [target];
+	build seqword_post;
+}
+# TODO: what aboud conditional jumps that save uip?
+# direct ujmp that is a ucall probably, since saves uip
+:ucall source1_target_imm seqword_pre^seqword_post is uop_with_saveuip_next=1 & (is_src1_imm=1 | (src1_sel=0 & is_src1_imm=0)) & opcode=0x15d & source1_target_imm; seqword_pre & seqword_post {
+	build seqword_pre;
+	call source1_target_imm;
+	build seqword_post;
+}
+# indirect ujmp that is a ucall, since saves uip
+:ucall source1 seqword_pre^seqword_post is uop_with_saveuip_next=1 & is_src1_imm=0 & opcode=0x15d & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	local target = source1 * $(INSTR_LEN);
+	call [target];
+	build seqword_post;
+}
+
+# uflowctrl
+define pcodeop uflow_unknown;
+:uflow "unk" dest source0, source1 seqword_pre^seqword_post is opcode=0x142 & imm0_low8=0x01 & dest & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = uflow_unknown(source0, source1);
+	build seqword_post;
+}
+# TODO: what is the meaning of the additional source0 and dest here?
+# source1 seems to often be set to some ucode address before executing this, but there are also some saveuip to set uip
+# so what is the target of the return? keep uip for consistency
+# NOTICE: there is often the sequence `SAVEUIP(0x00, U0686); UFLOWCTRL(URET0, reg)` which does not make sense since U0686 contains a uret0, so reg should update uip0 maybe?
+# the semantics here is a bit of a guess, based on the fact that source1 always contains some uaddr, and that often uip just points to an address that has a ret
+# like a saveuip + ret
+define pcodeop uflow_uret;
+:uflow "uret0" source1 seqword_pre^seqword_post is opcode=0x142 & imm0_low8=0x0a & dest & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	# local target = uip0;
+	# uip0 = source1;
+	# goto [target*$(INSTR_LEN)]; 
+	uflow_uret(0:8, source1);
+	build seqword_post;
+}
+:uflow "uret1" source1 seqword_pre^seqword_post is opcode=0x142 & imm0_low8=0x0b & dest & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	# local target = uip1;
+	# uip1 = source1;
+	# goto [target*$(INSTR_LEN)];
+	uflow_uret(1:8, source1);
+	build seqword_post;
+}
+define pcodeop ldat_in;
+:uflow "ldat_in" dest source0, source1 seqword_pre^seqword_post is opcode=0x142 & imm0_low8=0x0d & dest & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = ldat_in(source0, source1);
+	build seqword_post;
+}
+:uflow msloopctr, source1 seqword_pre^seqword_post is opcode=0x142 & imm0_low8=0x0e & msloopctr & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	msloopctr = source1;
+	build seqword_post;
+}
+define pcodeop write_ustate;
+:uflow ucode_ustate, source1 seqword_pre^seqword_post is opcode=0x142 & imm0_low8=0x0f & ucode_ustate & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	ucode_ustate = source1:2;
+	# force it appearing in the disasm
+	write_ustate(ucode_ustate);
+	build seqword_post;
+}
+
+source1_cmpj: src1 is src1 & src1_sel { export src1; }
+source1_cmpj: first_imm is imm0_sel0 & imm1_sel=0 & src1_sel = 16 [first_imm = (imm0_sel0) >> 15;] {export *[const]:8 first_imm;}
+source1_cmpj: first_imm is imm0_sel1 & imm1_sel=1 & src1_sel = 16 [first_imm = (imm0_sel1) >> 15;] {export *[const]:8 first_imm;}
+source1_cmpj: first_imm is imm0_sel2 & imm1_sel=2 & src1_sel = 16 [first_imm = (imm0_sel2) >> 15;] {export *[const]:8 first_imm;}
+source1_cmpj: first_imm is imm0_sel3 & imm1_sel=3 & src1_sel = 16 [first_imm = (imm0_sel3) >> 15;] {export *[const]:8 first_imm;}
+source1_cmpj: immediate is src1_sel = 0 & src1_sel [ immediate = 0; ] { export *[const]:8 immediate; }
+source1_cmpj: immediate is imm0 & imm1 & m0 & (src1_sel = 8 | src1_sel = 9 | src1_sel = 10 | src1_sel = 11 | src1_sel = 12 | src1_sel = 13 | src1_sel = 14 | src1_sel = 15 | src1_sel = 24 | src1_sel = 25 | src1_sel = 26 | src1_sel = 27 | src1_sel = 28 | src1_sel = 29 | src1_sel = 30 | src1_sel = 31) & src1_sel [
+	immediate = (((src1_sel & 0x10) << 1) | ((src1_sel & 0x07) << 2) | (imm1 >> 4) | (m0 << 1));
+] { export *[const]:8 immediate; }
+cmpj_target: second_imm is imm0_sel0 & imm1_sel=0 & src1_sel = 16 [second_imm = (imm0_sel0 & 0x7fff) | 0x20;] {export *[ucode]:8 second_imm;}
+cmpj_target: second_imm is imm0_sel1 & imm1_sel=1 & src1_sel = 16 [second_imm = (imm0_sel1 & 0x7fff) | 0x20;] {export *[ucode]:8 second_imm;}
+cmpj_target: second_imm is imm0_sel2 & imm1_sel=2 & src1_sel = 16 [second_imm = (imm0_sel2 & 0x7fff) | 0x20;] {export *[ucode]:8 second_imm;}
+cmpj_target: second_imm is imm0_sel3 & imm1_sel=3 & src1_sel = 16 [second_imm = (imm0_sel3 & 0x7fff) | 0x20;] {export *[ucode]:8 second_imm;}
+cmpj_target: immediate is imm1_sel & src1_sel & imm0 & imm1 & m1 & m2 & dst_16 [
+#    immediate = ((full_uop & 0x10000) >> 2) | ((full_uop & 0x100000000000) >> 31) | ((full_uop & 0x200000000000) >> 33) | \
+#                     ((full_uop & 0x3c0000) >> 10) | ((full_uop & 0xff000000) >> 24)
+    immediate = ((dst_16 << 14) | (m1 << 13) | (m2 << 12) | ((imm1 & 0xf) << 8) | imm0) * $(INSTR_LEN);
+] { export *[ucode]:8 immediate; }
+# bit test and jump
+:btjnz source0, source1_cmpj, cmpj_target seqword_pre^seqword_post is opcode=0x86a & source0 & source1_cmpj & cmpj_target; seqword_pre & seqword_post {
+	build seqword_pre;
+	local cnt = source1_cmpj & 0x3f;
+	local bit = ((source0 >> cnt) & 1);
+	if (bit != 0) goto cmpj_target;
+	build seqword_post;
+}
+:btjz source0, source1_cmpj, cmpj_target seqword_pre^seqword_post is opcode=0x86b & source0 & source1_cmpj & cmpj_target; seqword_pre & seqword_post {
+	build seqword_pre;
+	local cnt = source1_cmpj & 0x3f;
+	local bit = ((source0 >> cnt) & 1);
+	if (bit == 0) goto cmpj_target;
+	build seqword_post;
+}
+# cmp & jump
+:cmpjz source0, source1_cmpj, cmpj_target seqword_pre^seqword_post is opcode=0x928 & source0 & source1_cmpj & cmpj_target; seqword_pre & seqword_post {
+	build seqword_pre;
+	if (source0 == source1_cmpj) goto cmpj_target;
+	build seqword_post;
+}
+:cmpjnz source0, source1_cmpj, cmpj_target seqword_pre^seqword_post is opcode=0x929 & source0 & source1_cmpj & cmpj_target; seqword_pre & seqword_post {
+	build seqword_pre;
+	if (source0 != source1_cmpj) goto cmpj_target;
+	build seqword_post;
+}
+
+ucode_target: target is imm0 & imm1 & src1_sel [
+	target = (((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0) * $(INSTR_LEN);
+] { export *[ucode]:8 target; }
+#TODO: saveuip misses the syntax and semantics of the first source register and dest
+:saveuip uip_reg, ucode_target seqword_pre^seqword_post is dst_sel=0 & (is_src0_imm=1|src0_sel=0) & dest & (opcode = 0x00c | opcode = 0x04c | opcode = 0x08c | opcode = 0x0cc) & uip_reg & ucode_target; seqword_pre & seqword_post {
+	build seqword_pre;
+	uip_reg = &ucode_target/$(INSTR_LEN);
+	build seqword_post;
+}
+:saveuip source0, uip_reg, ucode_target seqword_pre^seqword_post is dst_sel=0 & is_src0_imm=0 & dest & source0 & (opcode = 0x00c | opcode = 0x04c | opcode = 0x08c | opcode = 0x0cc) & uip_reg & ucode_target; seqword_pre & seqword_post {
+	build seqword_pre;
+	uip_reg = &ucode_target/$(INSTR_LEN);
+	build seqword_post;
+}
+:saveuip dest uip_reg, ucode_target seqword_pre^seqword_post is dest & (is_src0_imm=1|src0_sel=0) & (opcode = 0x00c | opcode = 0x04c | opcode = 0x08c | opcode = 0x0cc) & uip_reg & ucode_target; seqword_pre & seqword_post {
+	build seqword_pre;
+	uip_reg = &ucode_target/$(INSTR_LEN);
+	build seqword_post;
+}
+:saveuip dest source0, uip_reg, ucode_target seqword_pre^seqword_post is dest & is_src0_imm=0 & source0 & (opcode = 0x00c | opcode = 0x04c | opcode = 0x08c | opcode = 0x0cc) & uip_reg & ucode_target; seqword_pre & seqword_post {
+	build seqword_pre;
+	uip_reg = &ucode_target/$(INSTR_LEN);
+	build seqword_post;
+}
+
+define pcodeop regovr;
+ucode_next:next is opcode [ next = inst_next; ] {
+  export *[ucode]:8 next;
+}
+saveuip_ov_imm: value is imm0 & imm1 & src1_sel [
+	value = (((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0);
+] { export *[const]:8 value; }
+:saveuip_ov uip_reg, ucode_next, saveuip_ov_imm seqword_pre^seqword_post is dst_sel=0 & saveuip_ov_imm & dest & opcode = 0x00d & uip_reg & ucode_next; seqword_pre & seqword_post {
+	build seqword_pre;
+	uip_reg = &ucode_next/$(INSTR_LEN);
+	# this is a guess, otherwise saveuip_ov_imm would not be used
+	regovr(saveuip_ov_imm);
+	build seqword_post;
+}
+# TODO: third_imm of SAVEUIP_REGOVR (no idea on semantics)
+:saveuip_ov dest uip_reg, ucode_next, saveuip_ov_imm seqword_pre^seqword_post is saveuip_ov_imm & dest & opcode = 0x00d & uip_reg & ucode_next; seqword_pre & seqword_post {
+	build seqword_pre;
+	uip_reg = &ucode_next/$(INSTR_LEN);
+	# this is a guess, otherwise saveuip_ov_imm would not be used
+	regovr(saveuip_ov_imm);
+	build seqword_post;
+}
+:readuip_ov dest uip_reg seqword_pre^seqword_post is dest & opcode = 0x108 & uip_reg; seqword_pre & seqword_post {
+	build seqword_pre;
+	regovr(dest >> 16);
+	dest = uip_reg;
+	build seqword_post;
+}
+
+:uret uip_reg seqword_pre^seqword_post is dst_sel=0 & dest & uip_reg & opcode=0x148; seqword_pre & seqword_post {
+	build seqword_pre;
+	goto [uip_reg*$(INSTR_LEN)];
+	build seqword_post;
+}
+#TODO: what is the semantics here?
+:uret dest uip_reg, source0 seqword_pre^seqword_post is dest & source0 & uip_reg & opcode=0x148; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = source0;
+	goto [uip_reg*$(INSTR_LEN)];
+	build seqword_post;
+}
+
+# === testustate ===
+# The first numeric 16-bit argument (second in the disassembler’s listing) defines which bits in correspondent 
+# state/bitmask to check. For all modes except SYS, the set bit in argument checks whether the correspondent bit 
+# in state or bitmask is clear. For SYS mode, the set bit checks that correspondent state (architectural mode) is activated. 
+# The mode bit m0 of the uop inverts the rules described above (if m0 is set the TESTUSATE checks the set bits in VMS states/bitmask
+#  and that the SYS arch mode is not activated)
+
+# In practice only SYS ustate will have combinations of different bits
+testustate_cond: immediate is imm0 & imm1 & src1_sel [
+	immediate = ((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0;
+] { export *[const]:2 immediate; }
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel & testustate_cond & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if the corresponding bit is clear, if not skip the seqword
+	if ((testustate_mode & testustate_cond) != 0) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel & testustate_cond & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if the corresponding bit is clear, if yes skip the seqword
+	if ((testustate_mode & testustate_cond) == 0) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+# MSLOOPCTR edge case
+:testustate msloopctr ?^seqword_pre^seqword_post is m0=0 & msloopctr & testustate_mode & testustate_mode_sel=0 & testustate_cond & imm0=1 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if the corresponding bit is clear, if not skip the seqword
+	msloopctr = msloopctr -1;
+	if (msloopctr s< 0) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate !^msloopctr ?^seqword_pre^seqword_post is m0=1 & msloopctr & testustate_mode & testustate_mode_sel=0 & testustate_cond & imm0=1 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if the corresponding bit is clear, if yes skip the seqword
+	msloopctr = msloopctr -1;
+	if (msloopctr s>= 0) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+# SYS ustate
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if ((testustate_mode & testustate_cond) == 0) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if ((testustate_mode & testustate_cond) != 0) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+# some more readable ustates
+define pcodeop in_usermode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=2 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_usermode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=2 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_usermode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+define pcodeop in_vmx_dis_mode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=1 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_vmx_dis_mode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=1 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_vmx_dis_mode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+define pcodeop in_8086_mode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=4 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_8086_mode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=4 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_8086_mode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+define pcodeop in_smm_mode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x20 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_smm_mode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x20 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_smm_mode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+define pcodeop in_vmx_guest_mode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x80 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_vmx_guest_mode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x80 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_vmx_guest_mode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+define pcodeop in_op_size_32bit_mode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x8 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_op_size_32bit_mode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x8 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_op_size_32bit_mode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+define pcodeop in_add_size_64bit_mode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x10 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_add_size_64bit_mode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x10 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_add_size_64bit_mode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+define pcodeop in_vmx_dual_mode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x40 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_vmx_dual_mode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x40 & imm1=0 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_vmx_dual_mode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+
+define pcodeop in_vmx_op_dis_mode;
+:testustate testustate_mode, testustate_cond ?^seqword_pre^seqword_post is m0=0 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x0 & imm1=0x1 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is not met, skip the seqword
+	# check if any of the corresponding bits are set, if not skip the seqword
+	if (in_vmx_op_dis_mode() == 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+:testustate testustate_mode, !^testustate_cond ?^seqword_pre^seqword_post is m0=1 & testustate_mode & testustate_mode_sel=1 & testustate_cond & imm0=0x0 & imm1=0x1 & src1_sel_low3=0 & (opcode=0x00a | opcode=0x04a); seqword_pre & seqword_post {
+	build seqword_pre;
+	# if the condition is met, skip the seqword
+	# check if any of the corresponding bits are set, if yes skip the seqword
+	if (in_vmx_op_dis_mode() != 0:8) goto <skip>;
+	build seqword_post;
+	<skip>
+}
+
+
+updustate_imm: immediate is imm0 & imm1 & src1_sel [
+	immediate = ((((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0) & 0x3f) << 2;
+] { export *[const]:2 immediate; }
+:updustate updustate_imm seqword_pre^seqword_post is m0=0 & updustate_imm & opcode=0x00b; seqword_pre & seqword_post {
+	build seqword_pre;
+	ucode_ustate = ucode_ustate | updustate_imm;
+	write_ustate(ucode_ustate);
+	build seqword_post;
+}
+:updustate !^updustate_imm seqword_pre^seqword_post is m0=1 & updustate_imm & opcode=0x00b; seqword_pre & seqword_post {
+	build seqword_pre;
+	ucode_ustate = ucode_ustate & ~updustate_imm;
+	write_ustate(ucode_ustate);
+	build seqword_post;
+}
+
+:wmsloopctr dest single_imm seqword_pre^seqword_post is dest & single_imm & msloopctr & opcode=0x00e; seqword_pre & seqword_post {
+	build seqword_pre;
+	msloopctr = single_imm;
+	dest = single_imm;
+	build seqword_post;
+}
+
+# segment descriptors read/writes
+define pcodeop unpack_sel;
+define pcodeop unpack_flags;
+define pcodeop unpack_limit;
+define pcodeop pack_descriptor;
+define pcodeop wseg_unknown_combination;
+# why life has to be so complicated :(
+# we have to provide access to each of the different fields of the descriptors
+#<symbol name="{seg_sel}_SEL"    address="segdesc:{i*DESCR_LEN + 0x00}"/>
+#<symbol name="{seg_sel}_FLAGS"  address="segdesc:{i*DESCR_LEN + 0x08}"/>
+#<symbol name="{seg_sel}_BASE"   address="segdesc:{i*DESCR_LEN + 0x10}"/>
+#<symbol name="{seg_sel}_LIM"    address="segdesc:{i*DESCR_LEN + 0x18}"/>
+#<symbol name="{seg_sel}_UNK1"   address="segdesc:{i*DESCR_LEN + 0x20}"/>
+#<symbol name="{seg_sel}_UNK2"   address="segdesc:{i*DESCR_LEN + 0x28}"/>
+@define DESCR_LEN 0x30
+# read segment descriptor
+desc_sel:   addr is rseg_sel & opcode=0xc4b [addr = rseg_sel*$(DESCR_LEN) + 0x00;] {export *[segdesc]:8 addr;}
+desc_flags: addr is rseg_sel & opcode=0xc4b [addr = rseg_sel*$(DESCR_LEN) + 0x08;] {export *[segdesc]:8 addr;}
+desc_base:  addr is rseg_sel & opcode=0xc4b [addr = rseg_sel*$(DESCR_LEN) + 0x10;] {export *[segdesc]:8 addr;}
+desc_lim:   addr is rseg_sel & opcode=0xc4b [addr = rseg_sel*$(DESCR_LEN) + 0x18;] {export *[segdesc]:8 addr;}
+desc_unk1:  addr is rseg_sel & opcode=0xc4b [addr = rseg_sel*$(DESCR_LEN) + 0x20;] {export *[segdesc]:8 addr;}
+desc_unk2:  addr is rseg_sel & opcode=0xc4b [addr = rseg_sel*$(DESCR_LEN) + 0x28;] {export *[segdesc]:8 addr;}
+# write segment descriptor
+desc_sel:   addr is wseg_sel & (opcode=0xc6b | opcode=0xc7b) [addr = wseg_sel*$(DESCR_LEN) + 0x00;] {export *[segdesc]:8 addr;}
+desc_flags: addr is wseg_sel & (opcode=0xc6b | opcode=0xc7b) [addr = wseg_sel*$(DESCR_LEN) + 0x08;] {export *[segdesc]:8 addr;}
+desc_base:  addr is wseg_sel & (opcode=0xc6b | opcode=0xc7b) [addr = wseg_sel*$(DESCR_LEN) + 0x10;] {export *[segdesc]:8 addr;}
+desc_lim:   addr is wseg_sel & (opcode=0xc6b | opcode=0xc7b) [addr = wseg_sel*$(DESCR_LEN) + 0x18;] {export *[segdesc]:8 addr;}
+desc_unk1:  addr is wseg_sel & (opcode=0xc6b | opcode=0xc7b) [addr = wseg_sel*$(DESCR_LEN) + 0x20;] {export *[segdesc]:8 addr;}
+desc_unk2:  addr is wseg_sel & (opcode=0xc6b | opcode=0xc7b) [addr = wseg_sel*$(DESCR_LEN) + 0x28;] {export *[segdesc]:8 addr;}
+
+# We split also the operations, instead of putting the constraints on the desc_XXX varnodes to support different field size or operations
+# Currently, all fields of the descriptor are 64bits, which makes not so much sense
+:rseg dest desc_sel seqword_pre^seqword_post is dest & desc_sel & segfld_sel=8 & opcode=0xc4b; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = desc_sel;
+	build seqword_post;
+}
+:rseg dest desc_flags seqword_pre^seqword_post is dest & desc_flags & segfld_sel=4 & opcode=0xc4b; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = desc_flags;
+	build seqword_post;
+}
+:rseg dest desc_base seqword_pre^seqword_post is dest & desc_base & segfld_sel=2 & opcode=0xc4b; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = desc_base;
+	build seqword_post;
+}
+:rseg dest desc_lim seqword_pre^seqword_post is dest & desc_lim & (segfld_sel=6 | segfld_sel=0) & opcode=0xc4b; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = desc_lim;
+	build seqword_post;
+}
+:rseg dest desc_unk1 seqword_pre^seqword_post is dest & desc_unk1 & segfld_sel=0xc & opcode=0xc4b; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = desc_unk1;
+	build seqword_post;
+}
+:rseg dest desc_unk2 seqword_pre^seqword_post is dest & desc_unk2 & segfld_sel=0xe & opcode=0xc4b; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = desc_unk2;
+	build seqword_post;
+}
+:rseg dest desc_sel, desc_flags, desc_lim seqword_pre^seqword_post is dest & desc_sel & desc_flags & desc_lim & segfld_sel=0xa & opcode=0xc4b; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = pack_descriptor(desc_sel, desc_flags, desc_lim);
+	build seqword_post;
+}
+
+:wseg source0, desc_sel seqword_pre^seqword_post is source0 & desc_sel & segfld_sel=8 & (opcode=0xc6b | opcode=0xc7b); seqword_pre & seqword_post {
+	build seqword_pre;
+	desc_sel = source0;
+	build seqword_post;
+}
+:wseg source0, desc_flags seqword_pre^seqword_post is source0 & desc_flags & segfld_sel=4 & (opcode=0xc6b | opcode=0xc7b); seqword_pre & seqword_post {
+	build seqword_pre;
+	desc_flags = source0;
+	build seqword_post;
+}
+:wseg source0, desc_base seqword_pre^seqword_post is source0 & desc_base & segfld_sel=2 & (opcode=0xc6b | opcode=0xc7b); seqword_pre & seqword_post {
+	build seqword_pre;
+	desc_base = source0;
+	build seqword_post;
+}
+:wseg source0, desc_lim seqword_pre^seqword_post is source0 & desc_lim & (segfld_sel=6 | segfld_sel=0) & (opcode=0xc6b | opcode=0xc7b); seqword_pre & seqword_post {
+	build seqword_pre;
+	desc_lim = source0;
+	build seqword_post;
+}
+:wseg source0, desc_unk1 seqword_pre^seqword_post is source0 & desc_unk1 & segfld_sel=0xc & (opcode=0xc6b | opcode=0xc7b); seqword_pre & seqword_post {
+	build seqword_pre;
+	desc_unk1 = source0;
+	build seqword_post;
+}
+:wseg source0, desc_unk2 seqword_pre^seqword_post is source0 & desc_unk2 & segfld_sel=0xe & (opcode=0xc6b | opcode=0xc7b); seqword_pre & seqword_post {
+	build seqword_pre;
+	desc_unk2 = source0;
+	build seqword_post;
+}
+:wseg source0, desc_sel, desc_flags, desc_lim seqword_pre^seqword_post is source0 & desc_sel & desc_flags & desc_lim & segfld_sel=0xa & (opcode=0xc6b | opcode=0xc7b); seqword_pre & seqword_post {
+	build seqword_pre;
+	desc_sel = unpack_sel(source0);
+	desc_flags = unpack_flags(source0);
+	desc_lim = unpack_limit(source0);
+	build seqword_post;
+}
+:wseg "UNKOWN COMBINATION" seqword_pre^seqword_post is source0 & segfld_sel & (opcode=0xc6b | opcode=0xc7b); seqword_pre & seqword_post {
+	build seqword_pre;
+	wseg_unknown_combination();
+	build seqword_post;
+}
+
+# port in/out
+define pcodeop portin;
+define pcodeop portout;
+:in^"_"^dst_size dest source0 seqword_pre^seqword_post is (opcode = 0xd0b | opcode = 0xd4b | opcode = 0xd8b | opcode = 0xdcb) & dest & source0 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = portin(source0);
+	build seqword_post;
+}
+:out^"_"^dst_size source0, source2 seqword_pre^seqword_post is (opcode = 0xd0f | opcode = 0xd4f | opcode = 0xd8f | opcode = 0xdcf) & source0 & source2 & dst_size; seqword_pre & seqword_post {
+	build seqword_pre;
+	portout(source0, source2);
+	build seqword_post;
+}
+
+# ===== LD/STAD operations with all the possible access sizes ====
+
+# TODO: understand the semantics of STAD (store-ish?), LD (load?), but what is the meaning of the prefixes? PPHYS, TICKLE, PPHYSTICKLE, STGBUF (staging buffer yes), ZX (zero extend)
+# DSZ: destination size, ASZ: address size? SC: scale?
+# waiting to understand better, model with pcode operations -> now yolo it
+define pcodeop lea;
+define pcodeop load;
+define pcodeop store;
+define pcodeop load_tickle;
+define pcodeop store_tickle;
+define pcodeop load_pphys;
+define pcodeop store_pphys;
+define pcodeop load_pphystickle;
+define pcodeop store_pphystickle;
+define pcodeop load_stgbuf;
+define pcodeop store_stgbuf;
+
+# TODO: special_idx_case (imm_sel == 0x10 and not is_src0_imm and is_src1_imm) is never happening in the code, not sure why it is present
+ldstad_imm: imm is m0=0 & (is_src0_imm=0 & is_src1_imm=0) | (is_src1_imm=0 & is_src1_imm=1 & src1_sel=0x10) & imm0 [imm = (0xffffffffffffff00 * ((imm0 & 0x80) >> 7)) | imm0;] {export *[const]:8 imm;}
+ldstad_imm: MOP_alias is m0=1 & MOP_alias { export *[alias]:8 MOP_alias;}
+ldstad_imm: imm is m0=0 & is_src0_imm=1 & src0_sel & imm1 & imm0 [imm = ((src0_sel & 0x10) << 7) | ((src0_sel & 0x07) << 8) | imm0;] {export *[const]:8 imm;}
+ldstad_imm: imm is m0=0 & is_src1_imm=1 & is_src0_imm=0 & src1_sel & imm1 & imm0 [imm = ((src1_sel & 0x10) << 7) | ((src1_sel & 0x07) << 8) | imm0;] {export *[const]:8 imm;}
+
+ldstad_mode: imm1 is imm1 {export *[const]:8 imm1;}
+
+ldstad_stgbuf_imm: imm is m0=0 & (is_src0_imm=0 & is_src1_imm=0) | (is_src1_imm=0 & is_src1_imm=1 & src1_sel=0x10) & imm0 [imm = (0xffffffffffffff00 * ((imm0 & 0x80) >> 7)) | imm0;] {export *[const]:8 imm;}
+ldstad_stgbuf_imm: MOP_alias is m0=1 & MOP_alias { export *[alias]:8 MOP_alias;}
+ldstad_stgbuf_imm: imm is m0=0 & is_src0_imm=1 & src0_sel & imm1 & imm0 [imm = ((src0_sel & 0x07) << 13) | (imm1 << 8) | imm0;] {export *[const]:8 imm;}
+ldstad_stgbuf_imm: imm is m0=0 & is_src1_imm=1 & is_src0_imm=0 & src1_sel & imm1 & imm0 [imm = ((src1_sel & 0x07) << 13) | (imm1 << 8) | imm0;] {export *[const]:8 imm;}
+
+# TODO: model segment registers selected, or at least print them
+# TODO: show and understand mode semantics
+ldx_scale: scale is ldx_scale_sel=0 [scale = 1;] {export *[const]:8 scale;}
+ldx_scale: scale is ldx_scale_sel=1 [scale = 4;] {export *[const]:8 scale;}
+:ldzx^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=0 & dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc00 |opcode=0xc10 |opcode=0xc30 |opcode=0xc40 |opcode=0xc50 |opcode=0xc70 |opcode=0xc80 |opcode=0xc90 |opcode=0xcb0 |opcode=0xcc0 |opcode=0xcd0 |opcode=0xcf0 |opcode=0xd00 |opcode=0xd10 |opcode=0xd30 |opcode=0xd40 |opcode=0xd50 |opcode=0xd70 |opcode=0xd80 |opcode=0xd90 |opcode=0xdb0 |opcode=0xdc0 |opcode=0xdd0 |opcode=0xdf0); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:4 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ldzx^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=1 & dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc00 |opcode=0xc10 |opcode=0xc30 |opcode=0xc40 |opcode=0xc50 |opcode=0xc70 |opcode=0xc80 |opcode=0xc90 |opcode=0xcb0 |opcode=0xcc0 |opcode=0xcd0 |opcode=0xcf0 |opcode=0xd00 |opcode=0xd10 |opcode=0xd30 |opcode=0xd40 |opcode=0xd50 |opcode=0xd70 |opcode=0xd80 |opcode=0xd90 |opcode=0xdb0 |opcode=0xdc0 |opcode=0xdd0 |opcode=0xdf0); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	dest = *[mem]:8 addr;
+	build seqword_post;
+}
+
+:ldzx^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=2 & dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc00 |opcode=0xc10 |opcode=0xc30 |opcode=0xc40 |opcode=0xc50 |opcode=0xc70 |opcode=0xc80 |opcode=0xc90 |opcode=0xcb0 |opcode=0xcc0 |opcode=0xcd0 |opcode=0xcf0 |opcode=0xd00 |opcode=0xd10 |opcode=0xd30 |opcode=0xd40 |opcode=0xd50 |opcode=0xd70 |opcode=0xd80 |opcode=0xd90 |opcode=0xdb0 |opcode=0xdc0 |opcode=0xdd0 |opcode=0xdf0); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:2 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ldzx^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=3 & dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc00 |opcode=0xc10 |opcode=0xc30 |opcode=0xc40 |opcode=0xc50 |opcode=0xc70 |opcode=0xc80 |opcode=0xc90 |opcode=0xcb0 |opcode=0xcc0 |opcode=0xcd0 |opcode=0xcf0 |opcode=0xd00 |opcode=0xd10 |opcode=0xd30 |opcode=0xd40 |opcode=0xd50 |opcode=0xd70 |opcode=0xd80 |opcode=0xd90 |opcode=0xdb0 |opcode=0xdc0 |opcode=0xdd0 |opcode=0xdf0); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:1 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:lea^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc03 |opcode=0xc13 |opcode=0xc33 |opcode=0xc43 |opcode=0xc53 |opcode=0xc73 |opcode=0xc83 |opcode=0xc93 |opcode=0xcb3 |opcode=0xccf |opcode=0xcd3 |opcode=0xcf3 |opcode=0xd03 |opcode=0xd13 |opcode=0xd33 |opcode=0xd43 |opcode=0xd53 |opcode=0xd73 |opcode=0xd83 |opcode=0xd93 |opcode=0xdb3 |opcode=0xdc3 |opcode=0xdd3 |opcode=0xdf3); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	dest = addr;
+	build seqword_post;
+}
+
+:stad^"_"^dst_size source2, [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=0 & source2 & source1_noimm & source0_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc08 |opcode=0xc18 |opcode=0xc38 |opcode=0xc48 |opcode=0xc58 |opcode=0xc78 |opcode=0xc88 |opcode=0xc98 |opcode=0xcb8 |opcode=0xcc8 |opcode=0xcd8 |opcode=0xcf8 |opcode=0xd08 |opcode=0xd18 |opcode=0xd38 |opcode=0xd48 |opcode=0xd58 |opcode=0xd78 |opcode=0xd88 |opcode=0xd98 |opcode=0xdb8 |opcode=0xdc8 |opcode=0xdd8 |opcode=0xdf8); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	*[mem]:4 addr = source2:4;
+	build seqword_post;
+}
+
+:stad^"_"^dst_size source2, [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=1 & source2 & source1_noimm & source0_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc08 |opcode=0xc18 |opcode=0xc38 |opcode=0xc48 |opcode=0xc58 |opcode=0xc78 |opcode=0xc88 |opcode=0xc98 |opcode=0xcb8 |opcode=0xcc8 |opcode=0xcd8 |opcode=0xcf8 |opcode=0xd08 |opcode=0xd18 |opcode=0xd38 |opcode=0xd48 |opcode=0xd58 |opcode=0xd78 |opcode=0xd88 |opcode=0xd98 |opcode=0xdb8 |opcode=0xdc8 |opcode=0xdd8 |opcode=0xdf8); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	*[mem]:8 addr = source2;
+	build seqword_post;
+}
+
+:stad^"_"^dst_size source2, [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=2 & source2 & source1_noimm & source0_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc08 |opcode=0xc18 |opcode=0xc38 |opcode=0xc48 |opcode=0xc58 |opcode=0xc78 |opcode=0xc88 |opcode=0xc98 |opcode=0xcb8 |opcode=0xcc8 |opcode=0xcd8 |opcode=0xcf8 |opcode=0xd08 |opcode=0xd18 |opcode=0xd38 |opcode=0xd48 |opcode=0xd58 |opcode=0xd78 |opcode=0xd88 |opcode=0xd98 |opcode=0xdb8 |opcode=0xdc8 |opcode=0xdd8 |opcode=0xdf8); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	*[mem]:2 addr = source2:2;
+	build seqword_post;
+}
+
+:stad^"_"^dst_size source2, [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=3 & source2 & source1_noimm & source0_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc08 |opcode=0xc18 |opcode=0xc38 |opcode=0xc48 |opcode=0xc58 |opcode=0xc78 |opcode=0xc88 |opcode=0xc98 |opcode=0xcb8 |opcode=0xcc8 |opcode=0xcd8 |opcode=0xcf8 |opcode=0xd08 |opcode=0xd18 |opcode=0xd38 |opcode=0xd48 |opcode=0xd58 |opcode=0xd78 |opcode=0xd88 |opcode=0xd98 |opcode=0xdb8 |opcode=0xdc8 |opcode=0xdd8 |opcode=0xdf8); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	*[mem]:1 addr = source2:1;
+	build seqword_post;
+}
+
+# the original disasm shows source2 as the dest, but it seems to make more sense having source2 as the value written (TODO: somehow check_
+:stad_tickle^"_"^dst_size source2, [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is  dst_size_sel=0 & source2 & source1_noimm & source0_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc09 |opcode=0xc19 |opcode=0xc39 |opcode=0xc49 |opcode=0xc59 |opcode=0xc79 |opcode=0xc89 |opcode=0xc99 |opcode=0xcb9 |opcode=0xcc9 |opcode=0xcd9 |opcode=0xcf9 |opcode=0xd09 |opcode=0xd19 |opcode=0xd39 |opcode=0xd49 |opcode=0xd59 |opcode=0xd79 |opcode=0xd89 |opcode=0xd99 |opcode=0xdb9 |opcode=0xdc9 |opcode=0xdd9 |opcode=0xdf9); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	*[mem]:4 addr = source2:4;
+	build seqword_post;
+}
+
+:stad_tickle^"_"^dst_size source2, [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is  dst_size_sel=1 & source2 & source1_noimm & source0_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc09 |opcode=0xc19 |opcode=0xc39 |opcode=0xc49 |opcode=0xc59 |opcode=0xc79 |opcode=0xc89 |opcode=0xc99 |opcode=0xcb9 |opcode=0xcc9 |opcode=0xcd9 |opcode=0xcf9 |opcode=0xd09 |opcode=0xd19 |opcode=0xd39 |opcode=0xd49 |opcode=0xd59 |opcode=0xd79 |opcode=0xd89 |opcode=0xd99 |opcode=0xdb9 |opcode=0xdc9 |opcode=0xdd9 |opcode=0xdf9); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	*[mem]:8 addr = source2;
+	build seqword_post;
+}
+
+:stad_tickle^"_"^dst_size source2, [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is  dst_size_sel=2 & source2 & source1_noimm & source0_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc09 |opcode=0xc19 |opcode=0xc39 |opcode=0xc49 |opcode=0xc59 |opcode=0xc79 |opcode=0xc89 |opcode=0xc99 |opcode=0xcb9 |opcode=0xcc9 |opcode=0xcd9 |opcode=0xcf9 |opcode=0xd09 |opcode=0xd19 |opcode=0xd39 |opcode=0xd49 |opcode=0xd59 |opcode=0xd79 |opcode=0xd89 |opcode=0xd99 |opcode=0xdb9 |opcode=0xdc9 |opcode=0xdd9 |opcode=0xdf9); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	*[mem]:2 addr = source2:2;
+	build seqword_post;
+}
+
+:stad_tickle^"_"^dst_size source2, [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is  dst_size_sel=3 & source2 & source1_noimm & source0_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc09 |opcode=0xc19 |opcode=0xc39 |opcode=0xc49 |opcode=0xc59 |opcode=0xc79 |opcode=0xc89 |opcode=0xc99 |opcode=0xcb9 |opcode=0xcc9 |opcode=0xcd9 |opcode=0xcf9 |opcode=0xd09 |opcode=0xd19 |opcode=0xd39 |opcode=0xd49 |opcode=0xd59 |opcode=0xd79 |opcode=0xd89 |opcode=0xd99 |opcode=0xdb9 |opcode=0xdc9 |opcode=0xdd9 |opcode=0xdf9); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	*[mem]:1 addr = source2:1;
+	build seqword_post;
+}
+
+:ld_tickle^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=0 & dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc0a |opcode=0xc1a |opcode=0xc3a |opcode=0xc4a |opcode=0xc5a |opcode=0xc7a |opcode=0xc8a |opcode=0xc9a |opcode=0xcba |opcode=0xcca |opcode=0xcda |opcode=0xcfa |opcode=0xd0a |opcode=0xd1a |opcode=0xd3a |opcode=0xd4a |opcode=0xd5a |opcode=0xd7a |opcode=0xd8a |opcode=0xd9a |opcode=0xdba |opcode=0xdca |opcode=0xdda |opcode=0xdfa); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:4 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ld_tickle^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=1 & dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc0a |opcode=0xc1a |opcode=0xc3a |opcode=0xc4a |opcode=0xc5a |opcode=0xc7a |opcode=0xc8a |opcode=0xc9a |opcode=0xcba |opcode=0xcca |opcode=0xcda |opcode=0xcfa |opcode=0xd0a |opcode=0xd1a |opcode=0xd3a |opcode=0xd4a |opcode=0xd5a |opcode=0xd7a |opcode=0xd8a |opcode=0xd9a |opcode=0xdba |opcode=0xdca |opcode=0xdda |opcode=0xdfa); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	dest = *[mem]:8 addr;
+	build seqword_post;
+}
+
+:ld_tickle^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=2 & dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc0a |opcode=0xc1a |opcode=0xc3a |opcode=0xc4a |opcode=0xc5a |opcode=0xc7a |opcode=0xc8a |opcode=0xc9a |opcode=0xcba |opcode=0xcca |opcode=0xcda |opcode=0xcfa |opcode=0xd0a |opcode=0xd1a |opcode=0xd3a |opcode=0xd4a |opcode=0xd5a |opcode=0xd7a |opcode=0xd8a |opcode=0xd9a |opcode=0xdba |opcode=0xdca |opcode=0xdda |opcode=0xdfa); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:2 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ld_tickle^"_"^dst_size dest [source0_noimm + ldx_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=3 & dest & source0_noimm & source1_noimm & ldstad_imm & ldx_scale & dst_size & (opcode=0xc0a |opcode=0xc1a |opcode=0xc3a |opcode=0xc4a |opcode=0xc5a |opcode=0xc7a |opcode=0xc8a |opcode=0xc9a |opcode=0xcba |opcode=0xcca |opcode=0xcda |opcode=0xcfa |opcode=0xd0a |opcode=0xd1a |opcode=0xd3a |opcode=0xd4a |opcode=0xd5a |opcode=0xd7a |opcode=0xd8a |opcode=0xd9a |opcode=0xdba |opcode=0xdca |opcode=0xdda |opcode=0xdfa); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + ldx_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:1 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+phys_scale: scale is phys_scale_sel=0 [scale = 4;] {export *[const]:8 scale;}
+phys_scale: scale is phys_scale_sel=2 [scale = 1;] {export *[const]:8 scale;}
+phys_scale: scale is phys_scale_sel=3 [scale = 8;] {export *[const]:8 scale;}
+
+:ld_pphys^"_"^dst_size dest [source0_noimm + phys_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=0 & dest & source0_noimm & source1_noimm & ldstad_imm & phys_scale & dst_size & (opcode=0xe00 |opcode=0xe0a |opcode=0xe20 |opcode=0xe2a |opcode=0xe30 |opcode=0xe3a |opcode=0xe40 |opcode=0xe4a |opcode=0xe60 |opcode=0xe6a |opcode=0xe70 |opcode=0xe7a |opcode=0xe80 |opcode=0xe8a |opcode=0xea0 |opcode=0xeaa |opcode=0xeb0 |opcode=0xeba |opcode=0xec0 |opcode=0xeca |opcode=0xee0 |opcode=0xeea |opcode=0xef0 |opcode=0xefa |opcode=0xf00 |opcode=0xf0a |opcode=0xf20 |opcode=0xf2a |opcode=0xf30 |opcode=0xf3a |opcode=0xf40 |opcode=0xf4a |opcode=0xf60 |opcode=0xf6a |opcode=0xf70 |opcode=0xf7a |opcode=0xf80 |opcode=0xf8a |opcode=0xfa0 |opcode=0xfaa |opcode=0xfb0 |opcode=0xfba |opcode=0xfc0 |opcode=0xfca |opcode=0xfe0 |opcode=0xfea |opcode=0xff0 |opcode=0xffa); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + phys_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:4 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ld_pphys^"_"^dst_size dest [source0_noimm + phys_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=1 & dest & source0_noimm & source1_noimm & ldstad_imm & phys_scale & dst_size & (opcode=0xe00 |opcode=0xe0a |opcode=0xe20 |opcode=0xe2a |opcode=0xe30 |opcode=0xe3a |opcode=0xe40 |opcode=0xe4a |opcode=0xe60 |opcode=0xe6a |opcode=0xe70 |opcode=0xe7a |opcode=0xe80 |opcode=0xe8a |opcode=0xea0 |opcode=0xeaa |opcode=0xeb0 |opcode=0xeba |opcode=0xec0 |opcode=0xeca |opcode=0xee0 |opcode=0xeea |opcode=0xef0 |opcode=0xefa |opcode=0xf00 |opcode=0xf0a |opcode=0xf20 |opcode=0xf2a |opcode=0xf30 |opcode=0xf3a |opcode=0xf40 |opcode=0xf4a |opcode=0xf60 |opcode=0xf6a |opcode=0xf70 |opcode=0xf7a |opcode=0xf80 |opcode=0xf8a |opcode=0xfa0 |opcode=0xfaa |opcode=0xfb0 |opcode=0xfba |opcode=0xfc0 |opcode=0xfca |opcode=0xfe0 |opcode=0xfea |opcode=0xff0 |opcode=0xffa); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + phys_scale*source1_noimm + ldstad_imm;
+	dest = *[mem]:8 addr;
+	build seqword_post;
+}
+
+:ld_pphys^"_"^dst_size dest [source0_noimm + phys_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=2 & dest & source0_noimm & source1_noimm & ldstad_imm & phys_scale & dst_size & (opcode=0xe00 |opcode=0xe0a |opcode=0xe20 |opcode=0xe2a |opcode=0xe30 |opcode=0xe3a |opcode=0xe40 |opcode=0xe4a |opcode=0xe60 |opcode=0xe6a |opcode=0xe70 |opcode=0xe7a |opcode=0xe80 |opcode=0xe8a |opcode=0xea0 |opcode=0xeaa |opcode=0xeb0 |opcode=0xeba |opcode=0xec0 |opcode=0xeca |opcode=0xee0 |opcode=0xeea |opcode=0xef0 |opcode=0xefa |opcode=0xf00 |opcode=0xf0a |opcode=0xf20 |opcode=0xf2a |opcode=0xf30 |opcode=0xf3a |opcode=0xf40 |opcode=0xf4a |opcode=0xf60 |opcode=0xf6a |opcode=0xf70 |opcode=0xf7a |opcode=0xf80 |opcode=0xf8a |opcode=0xfa0 |opcode=0xfaa |opcode=0xfb0 |opcode=0xfba |opcode=0xfc0 |opcode=0xfca |opcode=0xfe0 |opcode=0xfea |opcode=0xff0 |opcode=0xffa); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + phys_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:2 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ld_pphys^"_"^dst_size dest [source0_noimm + phys_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=3 & dest & source0_noimm & source1_noimm & ldstad_imm & phys_scale & dst_size & (opcode=0xe00 |opcode=0xe0a |opcode=0xe20 |opcode=0xe2a |opcode=0xe30 |opcode=0xe3a |opcode=0xe40 |opcode=0xe4a |opcode=0xe60 |opcode=0xe6a |opcode=0xe70 |opcode=0xe7a |opcode=0xe80 |opcode=0xe8a |opcode=0xea0 |opcode=0xeaa |opcode=0xeb0 |opcode=0xeba |opcode=0xec0 |opcode=0xeca |opcode=0xee0 |opcode=0xeea |opcode=0xef0 |opcode=0xefa |opcode=0xf00 |opcode=0xf0a |opcode=0xf20 |opcode=0xf2a |opcode=0xf30 |opcode=0xf3a |opcode=0xf40 |opcode=0xf4a |opcode=0xf60 |opcode=0xf6a |opcode=0xf70 |opcode=0xf7a |opcode=0xf80 |opcode=0xf8a |opcode=0xfa0 |opcode=0xfaa |opcode=0xfb0 |opcode=0xfba |opcode=0xfc0 |opcode=0xfca |opcode=0xfe0 |opcode=0xfea |opcode=0xff0 |opcode=0xffa); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + phys_scale*source1_noimm + ldstad_imm;
+	local tmp = *[mem]:1 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:stad_pphys^"_"^dst_size source2, [source0_noimm + phys_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=0 & source2 & source1_noimm & source0_noimm & ldstad_imm & phys_scale & dst_size & (opcode=0xe08 |opcode=0xe28 |opcode=0xe38 |opcode=0xe48 |opcode=0xe68 |opcode=0xe78 |opcode=0xe88 |opcode=0xea8 |opcode=0xeb8 |opcode=0xec8 |opcode=0xee8 |opcode=0xef8 |opcode=0xf08 |opcode=0xf28 |opcode=0xf38 |opcode=0xf48 |opcode=0xf68 |opcode=0xf78 |opcode=0xf88 |opcode=0xfa8 |opcode=0xfb8 |opcode=0xfc8 |opcode=0xfe8 |opcode=0xff8); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + phys_scale*source1_noimm + ldstad_imm;
+	*[mem]:4 addr = source2:4;
+	build seqword_post;
+}
+
+:stad_pphys^"_"^dst_size source2, [source0_noimm + phys_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=1 & source2 & source1_noimm & source0_noimm & ldstad_imm & phys_scale & dst_size & (opcode=0xe08 |opcode=0xe28 |opcode=0xe38 |opcode=0xe48 |opcode=0xe68 |opcode=0xe78 |opcode=0xe88 |opcode=0xea8 |opcode=0xeb8 |opcode=0xec8 |opcode=0xee8 |opcode=0xef8 |opcode=0xf08 |opcode=0xf28 |opcode=0xf38 |opcode=0xf48 |opcode=0xf68 |opcode=0xf78 |opcode=0xf88 |opcode=0xfa8 |opcode=0xfb8 |opcode=0xfc8 |opcode=0xfe8 |opcode=0xff8); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + phys_scale*source1_noimm + ldstad_imm;
+	*[mem]:8 addr = source2;
+	build seqword_post;
+}
+
+:stad_pphys^"_"^dst_size source2, [source0_noimm + phys_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=2 & source2 & source1_noimm & source0_noimm & ldstad_imm & phys_scale & dst_size & (opcode=0xe08 |opcode=0xe28 |opcode=0xe38 |opcode=0xe48 |opcode=0xe68 |opcode=0xe78 |opcode=0xe88 |opcode=0xea8 |opcode=0xeb8 |opcode=0xec8 |opcode=0xee8 |opcode=0xef8 |opcode=0xf08 |opcode=0xf28 |opcode=0xf38 |opcode=0xf48 |opcode=0xf68 |opcode=0xf78 |opcode=0xf88 |opcode=0xfa8 |opcode=0xfb8 |opcode=0xfc8 |opcode=0xfe8 |opcode=0xff8); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + phys_scale*source1_noimm + ldstad_imm;
+	*[mem]:2 addr = source2:2;
+	build seqword_post;
+}
+
+:stad_pphys^"_"^dst_size source2, [source0_noimm + phys_scale*source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=3 & source2 & source1_noimm & source0_noimm & ldstad_imm & phys_scale & dst_size & (opcode=0xe08 |opcode=0xe28 |opcode=0xe38 |opcode=0xe48 |opcode=0xe68 |opcode=0xe78 |opcode=0xe88 |opcode=0xea8 |opcode=0xeb8 |opcode=0xec8 |opcode=0xee8 |opcode=0xef8 |opcode=0xf08 |opcode=0xf28 |opcode=0xf38 |opcode=0xf48 |opcode=0xf68 |opcode=0xf78 |opcode=0xf88 |opcode=0xfa8 |opcode=0xfb8 |opcode=0xfc8 |opcode=0xfe8 |opcode=0xff8); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + phys_scale*source1_noimm + ldstad_imm;
+	*[mem]:1 addr = source2:1;
+	build seqword_post;
+}
+
+:stad_pphystickle^"_"^dst_size source2, [source0_noimm + source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=0 & source2 & source1_noimm & source0_noimm & ldstad_imm & dst_size & (opcode=0xe0d |opcode=0xe2d |opcode=0xe4d |opcode=0xe6d |opcode=0xe8d |opcode=0xead |opcode=0xecd |opcode=0xeed); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_imm;
+	*[mem]:4 addr = source2;
+	build seqword_post;
+}
+
+:stad_pphystickle^"_"^dst_size source2, [source0_noimm + source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=1 & source2 & source1_noimm & source0_noimm & ldstad_imm & dst_size & (opcode=0xe0d |opcode=0xe2d |opcode=0xe4d |opcode=0xe6d |opcode=0xe8d |opcode=0xead |opcode=0xecd |opcode=0xeed); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_imm;
+	*[mem]:8 addr = source2;
+	build seqword_post;
+}
+
+:stad_pphystickle^"_"^dst_size source2, [source0_noimm + source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=2 & source2 & source1_noimm & source0_noimm & ldstad_imm & dst_size & (opcode=0xe0d |opcode=0xe2d |opcode=0xe4d |opcode=0xe6d |opcode=0xe8d |opcode=0xead |opcode=0xecd |opcode=0xeed); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_imm;
+	*[mem]:2 addr = source2:2;
+	build seqword_post;
+}
+
+:stad_pphystickle^"_"^dst_size source2, [source0_noimm + source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dst_size_sel=3 & source2 & source1_noimm & source0_noimm & ldstad_imm & dst_size & (opcode=0xe0d |opcode=0xe2d |opcode=0xe4d |opcode=0xe6d |opcode=0xe8d |opcode=0xead |opcode=0xecd |opcode=0xeed); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_imm;
+	*[mem]:1 addr = source2:1;
+	build seqword_post;
+}
+
+:ld_pphystickle^"_"^dst_size dest [source0_noimm + source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dest & dst_size_sel=0 & source0_noimm & source1_noimm & ldstad_imm & dst_size & (opcode=0xe25 |opcode=0xe65 |opcode=0xea5 |opcode=0xee5 |opcode=0xf65); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_imm;
+	local tmp = *[mem]:4 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ld_pphystickle^"_"^dst_size dest [source0_noimm + source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dest & dst_size_sel=1 & source0_noimm & source1_noimm & ldstad_imm & dst_size & (opcode=0xe25 |opcode=0xe65 |opcode=0xea5 |opcode=0xee5 |opcode=0xf65); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_imm;
+	dest = *[mem]:8 addr;
+	build seqword_post;
+}
+
+:ld_pphystickle^"_"^dst_size dest [source0_noimm + source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dest & dst_size_sel=2 & source0_noimm & source1_noimm & ldstad_imm & dst_size & (opcode=0xe25 |opcode=0xe65 |opcode=0xea5 |opcode=0xee5 |opcode=0xf65); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_imm;
+	local tmp = *[mem]:2 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ld_pphystickle^"_"^dst_size dest [source0_noimm + source1_noimm + ldstad_imm]  seqword_pre^seqword_post is dest & dst_size_sel=3 & source0_noimm & source1_noimm & ldstad_imm & dst_size & (opcode=0xe25 |opcode=0xe65 |opcode=0xea5 |opcode=0xee5 |opcode=0xf65); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_imm;
+	local tmp = *[mem]:1 addr;
+	dest = zext(tmp);
+	build seqword_post;
+}
+
+:ld_stgbuf^"_"^dst_size dest [source0_noimm + source1_noimm + ldstad_stgbuf_imm]  seqword_pre^seqword_post is dest & source0_noimm & source1_noimm & ldstad_stgbuf_imm & dst_size & (opcode=0xe75); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_stgbuf_imm;
+	dest = load_stgbuf(addr);
+	build seqword_post;
+}
+
+:stad_stgbuf^"_"^dst_size source2, [source0_noimm + source1_noimm + ldstad_stgbuf_imm]  seqword_pre^seqword_post is source2 & source1_noimm & source0_noimm & ldstad_stgbuf_imm & dst_size & (opcode=0xe7d); seqword_pre & seqword_post {
+	build seqword_pre;
+	local addr = source0_noimm + source1_noimm + ldstad_stgbuf_imm;
+	store_stgbuf(addr, source2);
+	build seqword_post;
+}
+
+define pcodeop sigevent;
+:sigevent source0, source1 seqword_pre^seqword_post is opcode = 0x21e & source0 & source1; seqword_pre & seqword_post {
+	build seqword_pre;
+	sigevent(source0, source1);
+	build seqword_post;
+}
+
+define pcodeop lbsync; 
+:lbsync imm0 seqword_pre^seqword_post is opcode = 0xfef & imm0; seqword_pre & seqword_post {
+	build seqword_pre;
+	lbsync(imm0:8);
+	build seqword_post;
+}
+
+define pcodeop is_non_canonical_address; 
+:test_addr dest source1 seqword_pre^seqword_post is opcode = 0x25d & dest & source1 & dst_ZF; seqword_pre & seqword_post {
+	build seqword_pre;
+	dst_ZF = is_non_canonical_address(source1);
+	build seqword_post;
+}
+
+define pcodeop bswap; 
+:bswap dest single_source seqword_pre^seqword_post is opcode = 0x33c & dest & single_source & dst_ZF; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = bswap(single_source);
+	build seqword_post;
+}
+
+define pcodeop readrom; 
+:rdrom dest single_source seqword_pre^seqword_post is opcode = 0x716 & dest & single_source & dst_ZF; seqword_pre & seqword_post {
+	build seqword_pre;
+	dest = readrom(single_source);
+	build seqword_post;
+}

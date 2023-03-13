@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<compiler_spec>
+
+	<data_organization>
+	     <absolute_max_alignment value="0" />
+	     <default_alignment value="1" />
+	     <default_pointer_alignment value="8" />
+	     <pointer_size value="8" />
+	     <wchar_size value="4" />
+	     <short_size value="2" />
+	     <integer_size value="4" />
+	     <long_size value="8" />
+	     <long_long_size value="8" />
+	     <float_size value="4" />
+	     <double_size value="8" />
+	     <long_double_size value="16" />
+	     <size_alignment_map>
+	          <entry size="1" alignment="1" />
+	          <entry size="2" alignment="2" />
+	          <entry size="4" alignment="4" />
+	          <entry size="8" alignment="8" />
+	     </size_alignment_map>
+	</data_organization>
+
+	<global>
+		<range space="ucode"/>
+        <range space="uram"/>
+        <range space="crbus"/>
+        <range space="alias"/>
+        <range space="segdesc"/>
+        <range space="mem"/>
+    </global>
+
+    <stackpointer register="dummy_reg" space="dummy_space" growth="negative"/>
+    
+    <default_proto>
+        <prototype name="default" extrapop="0" stackshift="0" strategy="register">
+            <input>
+                <pentry minsize="1" maxsize="8">
+                    <register name="rax"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="rbx"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="rcx"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="rdx"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="rsp"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="rbp"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="rsi"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="rdi"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r8"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r9"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r10"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r11"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r12"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r13"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r14"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r15"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp0"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp1"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp2"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp3"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp4"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp5"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp6"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp7"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp8"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp9"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp10"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp11"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp12"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp13"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp14"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp15"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmpv0"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmpv1"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmpv2"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmpv3"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r64dst"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r64src"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r64base"/>
+                </pentry>
+                <pentry minsize="1" maxsize="8">
+                    <register name="r64idx"/>
+                </pentry>
+            </input>
+            <output>
+                <pentry minsize="1" maxsize="8">
+                    <register name="tmp0"/>
+                </pentry>
+            </output>
+        </prototype>
+    </default_proto>
+</compiler_spec>
