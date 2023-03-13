@@ -1,0 +1,44 @@
+.org 0x7c00
+.patch 0xc40
+.entry 0
+
+# unsigned long long ctudiv(unsigned long long dividend, unsigned long long divisor, size_t size)
+let [dividend] := rax
+let [divisor]  := rcx
+let [size]     := 0x3f
+# unsigned long long quotient = 0, temp = 0;
+let [quotient] := tmp0
+let [temp]     := tmp1
+[quotient] := ZEROEXT_DSZ64(0x0)
+[temp] := ZEROEXT_DSZ64(0x0)
+
+let [temp1]    := tmp3
+let [temp2]    := tmp4
+let [temp3]    := tmp5
+let [temp4]    := tmp7
+let [temp5]    := tmp8
+
+let [cmp]    := tmp6
+
+let [i]        := tmp2
+[i] := ZEROEXT_DSZ64([size]) # int i = size*8-1
+
+<loop>
+
+UJMPCC_DIRECT_NOTTAKEN_CONDB([i], <end>) # if (i < 0 ) goto end;
+[temp1]:= SHL_DSZ64([temp], 0x1)     #     temp1 = (temp << 1uLL);
+[temp2]:= SHR_DSZ64([dividend], [i]) #     temp2 = (dividend >> i);
+[temp2]:= AND_DSZ64([temp2], 0x1)    #     temp2 = (temp2 & 1)
+[temp] := OR_DSZ64([temp1], [temp2]) #     temp = temp1 | temp2;
+[cmp]  := SUB_DSZ64([divisor], [temp]) #     bool cmp = (temp - divisor);
+[temp3]:= SELECTCC_DSZ64_CONDB([cmp], [divisor]) #     temp3 = (cmp>=0)? divisor : 0;
+[temp] := SUB_DSZ64([temp3], [temp])             #     temp -= temp3;
+[temp4]:= SHL_DSZ64(0x1, [i]) #     temp4 = 1uLL << i;
+[temp5]:= SELECTCC_DSZ64_CONDB([cmp], [temp4]) #     temp5 = (cmp>=0) ? temp4 : 0;
+[quotient] := OR_DSZ64([quotient], [temp5]) #     quotient |= temp5;
+
+[i] := SUB_DSZ64(0x1, [i]) SEQW GOTO <loop> # i--
+
+<end>
+rax := ZEROEXT_DSZ64([quotient])
+rdx := ZEROEXT_DSZ64(0x0)

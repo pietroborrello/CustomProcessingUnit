@@ -324,7 +324,8 @@ open_write_close_file(CHAR8 *Buf, CHAR16* Filename)
 static void
 usage(void)
 {
-    Print(L"Usage:\n"
+    Print(
+    L"Usage:\n"
     "  patch:        <tool> p\n"
     "  patch & exec: <tool> x\n"
     "  perf:         <tool> f\n"
@@ -344,14 +345,19 @@ usage(void)
     "  invoke:       <tool> i  [addr]\n"
     "  update ucode: <tool> u  [size]\n"
     "  ldat read:    <tool> lr [port] [array] [bank] [idx] [addr] [optional size]\n"
-    "  ldat write:   <tool> lw [port] [array] [bank] [idx] [addr] [value]\n");
+    "  ldat write:   <tool> lw [port] [array] [bank] [idx] [addr] [value]\n"
+    "  experiment:   <tool> e [exp_num (0: fastbp, 1: ctdiv, 2: PAC, 3: PACMAN, 4: condhwbp)]\n"
+    );
 }
 
 #define mfence() asm volatile("mfence\n")
 #define lfence() asm volatile("lfence\n")
 #define lmfence() asm volatile("lfence\n mfence\n")
 #define wbinvd() asm volatile("wbinvd\n")
-#define padding_cpuid() asm volatile("xor %%rax, %%rax\n xor %%rcx, %%rcx\n cpuid\n":::"cc", "rax", "rbx", "rcx", "rdx")
+#define barrier() asm volatile("xor %%rax, %%rax\n xor %%rcx, %%rcx\n cpuid\n":::"cc", "rax", "rbx", "rcx", "rdx")
+
+uint64_t ctx = 0xdeadbeef;
+uint64_t dummy;
 
 static void activate_udebug_insts(void) {
     wrmsr(0x1e6uL, 0x200uL);
@@ -835,6 +841,11 @@ BOOLEAN blacklisted_instruction(UINTN address) {
     // int1
     if (address == 0x3e94) return TRUE; // MOVETOCREG_DSZ64(tmp0, 0x070)
 
+    // div
+    // if (address == 0x6c8) return TRUE;
+    if (address == 0x6ca) return TRUE;
+    if (address == 0x6cc) return TRUE;
+
 
     // The next addresses in the black list where crashing if the match&patch was not
     // reinitialized at every iteration. Keep them for future reference
@@ -850,6 +861,12 @@ INTN unwrap_clock(UINTN value) {
     return (value &  0xffffffffffffffL) * 0x39 + (value >> 0x37);
 }
 
+static volatile UINTN var;
+static void func(UINTN rdi) {
+    var = rdi;
+    return;
+}
+
 #define STGBUF_COUNTER (0xba00)
 #define CRBUS_CLOCK (0x2000 | 0x2d7)
 INTN get_trace_clock_at(UINTN tracing_addr) {
@@ -861,7 +878,9 @@ INTN get_trace_clock_at(UINTN tracing_addr) {
 
     // [TRACED INSTRUCTION HERE]
 
-    wrmsr(IA32_BIOS_UPDT_TRIG, (unsigned long)(_ucode_data+48));
+    if (try_except(&exception_jmp_buf) == 0) {
+        asm volatile("int3\n");
+    }
 
     // [-----------------------]
 
@@ -994,6 +1013,10 @@ int access_time_flush(void* ptr) {
 
     return (uint64_t)(sum / ACCESS_REPETITIONS);
 }
+
+uint8_t ids[0x10000] = {0};
+#include "experiments.h"
+
 EFI_STATUS
 EFIAPI
 efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
@@ -1652,6 +1675,42 @@ efi_main (EFI_HANDLE image, EFI_SYSTEM_TABLE *SystemTable)
             rc4_key[6] = stgbuf_read(STGBUF_COUNTER + 0x280);
             rc4_key[7] = stgbuf_read(STGBUF_COUNTER + 0x2c0);
             DumpBufferHex(rc4_key, 8*8);
+        } else if (argv[1][0] == L'e') {
+            Print(L"[experiment]\n");
+
+            if (argc < 3) {
+                Print(L"[-] missing parameters\n");
+                return EFI_SUCCESS;
+            }
+
+            UINTN exp_idx  = utoi(argv[2]);
+            switch (exp_idx)
+            {
+            case 0: // fast ucode breakpoints
+                test_int3();
+                test_int1();
+                break;
+
+            case 1: // constant time hw division
+                test_CTDIV();
+                break;
+
+            case 2: // x86 PAC
+                test_PAC();
+                break;
+
+            case 3: // attack weak x86 PAC
+                test_PACMAN();
+                break;
+
+            case 4: // conditional hardware breakpoints
+                test_HBREAKCC();
+                break;
+            
+            default:
+                Print(L"unkown experiment idx: %016lx\n", exp_idx);
+                break;
+            }
         } else {
             Print(L"Unkown option: %s\n", argv[1]);
         }

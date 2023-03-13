@@ -158,3 +158,30 @@ cpu.efi p # apply the patch
 cpu.efi h 0 0x0428 0x7c00 # rdrand entry point
 ```
 now every time `rdrand` is executed, it will return `0x1337` in the registers.
+
+### Cite Us
+
+Our work has been published in a [paper](https://pietroborrello.com/publication/woot23/woot23.pdf) at [WOOT](https://wootconference.org/) 2023: 
+```
+@inproceedings{Borrello2023CustomProcessingUnit,
+    title = {{CustomProcessingUnit}: Reverse Engineering and Customization of Intel Microcode},
+    author = {Borrello, Pietro and Easdon, Catherine and Schwarzl, Martin and Czerny, Roland and Schwarz, Michael},
+    booktitle = {IEEE Workshop on Offensive Technologies (WOOT 23)},
+    year = {2023},
+}
+```
+
+### Experiments
+
+The experiments described in the paper can be run with:
+```
+cpu.efi e [exp_idx]
+```
+
+with `[exp_idx]`:
+
+0. Fast ucode breakpoints
+1. Constant-Time ucode division
+2. x86 PAC
+3. Attack x86 PAC with PACMAN
+4. Conditional Hardware Breakpoints

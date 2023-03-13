@@ -311,13 +311,63 @@ void irq_handler_c(idt_ctx_t *ctx) {
     // the system if put in except_irq, not sure why
     if (exception_jmp_buf.__rip == 0) {
         Print(L"[-] IRQ ABORTED:\n");
-        Print(L"  rip: 0x%lx -> 0x%016lx\n", ctx->rip, *(unsigned long*)ctx->rip);
+        Print(L"  rip: 0x%lx -> ", ctx->rip);
+        Print(L"0x%016lx\n", *(unsigned long*)ctx->rip);
         Print(L"  cs: 0x%lx\n", ctx->cs);
         Print(L"  rflags: 0x%lx\n", ctx->rflags);
     }
 
     ctx->rip = (unsigned long)except_irq;
 }
+
+uint8_t int3_ids[0x10000] = {0};
+void int3_handler_c(idt_ctx_t *ctx) {
+    int3_ids[ctx->rip & 0xffff]++;
+}
+
+void int3_handler(void);
+asm (
+    ".global int3_handler\n"
+"int3_handler:\n"
+    "cli\n"
+    "push %rax\n"
+    "mov %rsp, %rax\n"
+    "add $8,%rax\n" /* rax points to stack frame */
+    "push %rbx\n"
+    "push %rcx\n"
+    "push %rdx\n"
+    "push %rbp\n"
+    "push %rsi\n"
+    "push %rdi\n"
+    "push %r8\n"
+    "push %r9\n"
+    "push %r10\n"
+    "push %r11\n"
+    "push %r12\n"
+    "push %r13\n"
+    "push %r14\n"
+    "push %r15\n"
+
+    "mov %rax, %rdi\n" /* pass stack frame to handler so that he can modify it*/
+    "call int3_handler_c\n"
+
+    "pop %r15\n"
+    "pop %r14\n"
+    "pop %r13\n"
+    "pop %r12\n"
+    "pop %r11\n"
+    "pop %r10\n"
+    "pop %r9\n"
+    "pop %r8\n"
+    "pop %rdi\n"
+    "pop %rsi\n"
+    "pop %rbp\n"
+    "pop %rdx\n"
+    "pop %rcx\n"
+    "pop %rbx\n"
+    "pop %rax\n"
+    "iretq\n"
+);
 
 // register exception handlers to avoid hlt
 void setup_exceptions(void) {
@@ -328,7 +378,7 @@ void setup_exceptions(void) {
     set_irq_handler(&idt, EXCEPT_X64_DIVIDE_ERROR, NULL);
     set_irq_handler(&idt, EXCEPT_X64_GP_FAULT, NULL);
     set_irq_handler(&idt, EXCEPT_X64_PAGE_FAULT, NULL);
-    set_irq_handler(&idt, EXCEPT_X64_BREAKPOINT, NULL);
+    set_irq_handler(&idt, EXCEPT_X64_BREAKPOINT, int3_handler);
     set_irq_handler(&idt, EXCEPT_X64_INVALID_OPCODE, NULL);
     set_irq_handler(&idt, EXCEPT_X64_DEBUG, NULL);
     // dump_idt(&idt);

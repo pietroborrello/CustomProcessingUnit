@@ -1,0 +1,11 @@
+.org 0x7c00
+.patch 0xc40
+.entry 0
+
+tmp1:= LDSTGBUF_DSZ64_ASZ16_SC1(0xba00)
+tmp2:= ZEROEXT_DSZ64(0x1)
+tmp0:= ZEROEXT_DSZ64(IMM_MACRO_ALIAS_RIP) !m0
+tmp0:= AND_DSZ64(0xffff, tmp0)
+tmp2:= LDPPHYS_DSZ8_ASZ64_SC1(tmp1, tmp0)
+tmp2:= ADD_DSZ64(0x1, tmp2)
+STADPPHYS_DSZ8_ASZ64_SC1(tmp1, tmp0, tmp2)

@@ -1,0 +1,119 @@
+.org 0x7c00
+.patch 0xc40
+.entry 1
+
+# pac_sign(ptr: rax, ctx: rcx) -> signed_ptr: rax
+# Compute the PAC signature using a single round SipHash algorithm and embed it in the high 16 bits of a ptr
+# declare variables
+let [key] := tmp0
+let [ptr] := rax
+let [ctx] := rcx
+
+let [v0] := tmp1
+let [v1] := tmp2
+let [v2] := tmp3
+let [v3] := tmp4
+
+let [pac] := tmp5
+
+# --- initialize ---
+# static key for now
+[key] := ZEROEXT_MACRO(0x1122334455667788)
+
+# v0 = 0x736f6d6570736575 ^ key;
+[v0] := ZEROEXT_DSZ64(0x6575)
+[v0] := XOR_DSZ64([v0], [key])
+# v1 = 0x646f72616e646f6d ^ ctx;
+[v1] := ZEROEXT_DSZ64(0x6f6d)
+[v1] := XOR_DSZ64([v1], [ctx])
+# v2 = 0x6c7967656e657261 ^ key;
+[v2] := ZEROEXT_DSZ64(0x7261)
+[v2] := XOR_DSZ64([v2], [key])
+# v3 = 0x7465646279746573 ^ ctx;
+[v3] := ZEROEXT_DSZ64(0x6573)
+[v3] := XOR_DSZ64([v3], [ctx])
+
+# --- update ---
+# v3 ^= ptr;
+[v3] := XOR_DSZ64([v3], [ptr])
+
+# v0 += v1;
+[v0] := ADD_DSZ64([v0], [v1])
+# v2 += v3;
+[v2] := ADD_DSZ64([v2], [v3])
+# v1 = RotateLeft<13>(v1);
+[v1] := ROL_DSZ64([v1], 0xd)
+# v3 = RotateLeft<16>(v3);
+[v3] := ROL_DSZ64([v3], 0x10)
+# v1 ^= v0;
+[v1] := XOR_DSZ64([v1], [v0])
+# v3 ^= v2;
+[v3] := XOR_DSZ64([v3], [v2])
+
+# v0 = RotateLeft<32>(v0);
+[v0] := ROL_DSZ64([v0], 0x20)
+
+# v2 += v1;
+[v2] := ADD_DSZ64([v2], [v1])
+# v0 += v3;
+[v0] := ADD_DSZ64([v0], [v3])
+# v1 = RotateLeft<17>(v1);
+[v1] := ROL_DSZ64([v1], 0x11)
+# v3 = RotateLeft<21>(v3);
+[v3] := ROL_DSZ64([v3], 0x15)
+# v1 ^= v2;
+[v1] := XOR_DSZ64([v1], [v2])
+# v3 ^= v0;
+[v3] := XOR_DSZ64([v3], [v0])
+
+# v2 = RotateLeft<32>(v2);
+[v2] := ROL_DSZ64([v2], 0x20)
+
+# v0 ^= ptr;
+[v0] := XOR_DSZ64([v0], [ptr])
+
+# --- finalize ---
+# v2 ^= 0xFF;
+[v2] := XOR_DSZ64([v2], 0xff)
+
+# v0 += v1;
+[v0] := ADD_DSZ64([v0], [v1])
+# v2 += v3;
+[v2] := ADD_DSZ64([v2], [v3])
+# v1 = RotateLeft<13>(v1);
+[v1] := ROL_DSZ64([v1], 0xd)
+# v3 = RotateLeft<16>(v3);
+[v3] := ROL_DSZ64([v3], 0x10)
+# v1 ^= v0;
+[v1] := XOR_DSZ64([v1], [v0])
+# v3 ^= v2;
+[v3] := XOR_DSZ64([v3], [v2])
+
+# v0 = RotateLeft<32>(v0);
+[v0] := ROL_DSZ64([v0], 0x20)
+
+# v2 += v1;
+[v2] := ADD_DSZ64([v2], [v1])
+# v0 += v3;
+[v0] := ADD_DSZ64([v0], [v3])
+# v1 = RotateLeft<17>(v1);
+[v1] := ROL_DSZ64([v1], 0x11)
+# v3 = RotateLeft<21>(v3);
+[v3] := ROL_DSZ64([v3], 0x15)
+# v1 ^= v2;
+[v1] := XOR_DSZ64([v1], [v2])
+# v3 ^= v0;
+[v3] := XOR_DSZ64([v3], [v0])
+
+# v2 = RotateLeft<32>(v2);
+[v2] := ROL_DSZ64([v2], 0x20)
+
+[pac] := XOR_DSZ64([v0], [v1])
+[pac] := XOR_DSZ64([pac], [v2])
+[pac] := XOR_DSZ64([pac], [v3])
+
+# pac =  ((v0 ^ v1) ^ (v2 ^ v3)) << 48;
+[pac] := SHL_DSZ64([pac], 0x30)
+
+# sign ptr
+[ptr] := XOR_DSZ64([pac], [ptr])
